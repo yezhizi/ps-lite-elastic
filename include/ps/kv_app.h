@@ -246,6 +246,8 @@ class KVWorker : public SimpleApp {
             int cmd = 0,
             const Callback& cb = nullptr,
             int priority = 0) {
+
+    //TODO : modify the grope member
     int ts = obj_->NewRequest(kServerGroup);
     AddCallback(ts, cb);
     KVPairs<Val> kvs;
@@ -575,6 +577,7 @@ template <typename Val>
 void KVWorker<Val>::Send(int timestamp, bool push, bool pull, int cmd, const KVPairs<Val>& kvs) {
   // slice the message
   SlicedKVs sliced;
+  //TODO : server key ranges must be modified for elastic server number
   slicer_(kvs, Postoffice::Get()->GetServerKeyRanges(), &sliced);
 
   // need to add response first, since it will not always trigger the callback
@@ -596,8 +599,9 @@ void KVWorker<Val>::Send(int timestamp, bool push, bool pull, int cmd, const KVP
     msg.meta.request     = true;
     msg.meta.push        = push;
     msg.meta.pull        = pull;
-    msg.meta.head        = cmd;
+    msg.meta.head        = cmd; //TODO : cmd may be useful
     msg.meta.timestamp   = timestamp;
+    //TODO : i -> id 
     msg.meta.recver      = Postoffice::Get()->ServerRankToID(i);
     msg.meta.priority    = kvs.priority;
     const auto& kvs = s.second;

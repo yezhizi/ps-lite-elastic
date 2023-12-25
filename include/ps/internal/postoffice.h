@@ -18,6 +18,22 @@ namespace ps {
  */
 class Postoffice {
  public:
+
+
+  int add_server(int num_servers) {
+    std::lock_guard<std::mutex> lk(num_servers_mu_);
+    CHECK_GE(num_servers, 0);
+    num_servers_ += num_servers;
+    return num_servers_;
+  }
+  int del_server(int num_servers) {
+    std::lock_guard<std::mutex> lk(num_servers_mu_);
+    CHECK_GE(num_servers, 0);
+    CHECK_GE(num_servers_, num_servers);
+    num_servers_ -= num_servers;
+    return num_servers_;
+  }
+ 
   /**
    * \brief return the singleton object
    */
@@ -63,6 +79,7 @@ class Postoffice {
    * if it is a  node group, return the list of node ids in this
    * group. otherwise, return {node_id}
    */
+  //TODO : to be thread safe
   const std::vector<int>& GetNodeIDs(int node_id) const {
     const auto it = node_ids_.find(node_id);
     CHECK(it != node_ids_.cend()) << "node " << node_id << " doesn't exist";
@@ -177,6 +194,7 @@ class Postoffice {
   std::vector<Range> server_key_ranges_;
   bool is_worker_, is_server_, is_scheduler_;
   int num_servers_, num_workers_;
+  std::mutex num_servers_mu_; //modify the number of servers
   std::unordered_map<int, std::unordered_map<int, bool> > barrier_done_;
   int verbose_;
   std::mutex barrier_mu_;

@@ -248,7 +248,8 @@ void Van::ProcessAddNodeCommand(Message* msg, Meta* nodes,
     for (const auto& node : ctrl.node) {
       std::string addr_str = node.hostname + ":" + std::to_string(node.port);
       if (connected_nodes_.find(addr_str) == connected_nodes_.end()) {
-        Connect(node);
+        // will not connect the node if the type is same
+        Connect(node); 
         connected_nodes_[addr_str] = node.id;
       }
       if (!node.is_recovery && node.role == Node::SERVER) ++num_servers_;

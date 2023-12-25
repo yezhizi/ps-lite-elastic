@@ -12,7 +12,7 @@ namespace ps {
 Postoffice::Postoffice() {
   env_ref_ = Environment::_GetSharedRef();
 }
-
+//TODO : numbers will be not needed or will be changed
 void Postoffice::InitEnvironment() {
   const char* val = NULL;
   std::string van_type = GetEnv("DMLC_PS_VAN_TYPE", "zmq");
@@ -40,6 +40,7 @@ void Postoffice::Start(int customer_id, const char* argv0, const bool do_barrier
       dmlc::InitLogging("ps-lite\0");
     }
 
+    //TODO : how to modify ids?
     // init node info.
     for (int i = 0; i < num_workers_; ++i) {
       int id = WorkerRankToID(i);
@@ -166,6 +167,7 @@ void Postoffice::Barrier(int customer_id, int node_group) {
     });
 }
 
+//TODO : modify for elastic server number 
 const std::vector<Range>& Postoffice::GetServerKeyRanges() {
   server_key_ranges_mu_.lock();
   if (server_key_ranges_.empty()) {
