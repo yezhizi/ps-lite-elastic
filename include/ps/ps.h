@@ -35,7 +35,11 @@ inline int MyRank() { return Postoffice::Get()->my_rank(); }
  * \param argv0 the program name, used for logging
  */
 inline void Start(int customer_id, const char* argv0 = nullptr) {
-  Postoffice::Get()->Start(customer_id, argv0, true);
+  bool isDoBarrier = true;
+  if (argv0 == "doNotBarrier") {
+    isDoBarrier = false;
+  }
+  Postoffice::Get()->Start(customer_id, argv0, isDoBarrier);
 }
 /**
  * \brief start the system

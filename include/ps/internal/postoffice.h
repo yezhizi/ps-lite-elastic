@@ -19,20 +19,39 @@ namespace ps {
 class Postoffice {
  public:
 
+  void clear_nodes() {
+    std::lock_guard<std::mutex> lk(node_ids_mu_);
+    node_ids_.clear();
+    for (int g : {kScheduler, kScheduler + kServerGroup + kWorkerGroup,
+              kScheduler + kWorkerGroup, kScheduler + kServerGroup}) {
+      node_ids_[g].push_back(kScheduler);
+    }
+    
 
-  int add_server(int num_servers) {
-    std::lock_guard<std::mutex> lk(num_servers_mu_);
-    CHECK_GE(num_servers, 0);
-    num_servers_ += num_servers;
-    return num_servers_;
   }
-  int del_server(int num_servers) {
-    std::lock_guard<std::mutex> lk(num_servers_mu_);
-    CHECK_GE(num_servers, 0);
-    CHECK_GE(num_servers_, num_servers);
-    num_servers_ -= num_servers;
-    return num_servers_;
+  void add_server(const std::vector<int> & server_ids) {
+    std::lock_guard<std::mutex> lk(node_ids_mu_);
+    for (int id : server_ids) {
+      for (int g : {id, kServerGroup, kWorkerGroup + kServerGroup,
+                    kServerGroup + kScheduler,
+                    kWorkerGroup + kServerGroup + kScheduler}) {
+        node_ids_[g].push_back(id);
+      }
+    }
+    num_servers_ += server_ids.size();
   }
+  void add_worker(const std::vector<int> & worker_ids) {
+    std::lock_guard<std::mutex> lk(node_ids_mu_);
+    for (int id : worker_ids) {
+      for (int g : {id, kWorkerGroup, kWorkerGroup + kServerGroup,
+                    kWorkerGroup + kScheduler,
+                    kWorkerGroup + kServerGroup + kScheduler}) {
+        node_ids_[g].push_back(id);
+      }
+    }
+    num_workers_ += worker_ids.size();
+  }
+
  
   /**
    * \brief return the singleton object
@@ -79,8 +98,9 @@ class Postoffice {
    * if it is a  node group, return the list of node ids in this
    * group. otherwise, return {node_id}
    */
-  //TODO : to be thread safe
+  //to be thread safe
   const std::vector<int>& GetNodeIDs(int node_id) const {
+    std::lock_guard<std::mutex> lk(node_ids_mu_);
     const auto it = node_ids_.find(node_id);
     CHECK(it != node_ids_.cend()) << "node " << node_id << " doesn't exist";
     return it->second;
@@ -115,6 +135,7 @@ class Postoffice {
    * \brief convert from a worker rank into a node id
    * \param rank the worker rank
    */
+  //TODO: delete this function
   static inline int WorkerRankToID(int rank) {
     return rank * 2 + 9;
   }
@@ -122,6 +143,7 @@ class Postoffice {
    * \brief convert from a server rank into a node id
    * \param rank the server rank
    */
+  //TODO: delete this function
   static inline int ServerRankToID(int rank) {
     return rank * 2 + 8;
   }
@@ -136,9 +158,15 @@ class Postoffice {
     return std::max((id - 8) / 2, 0);
   }
   /** \brief Returns the number of worker nodes */
-  int num_workers() const { return num_workers_; }
+  int num_workers() const {
+    std::lock_guard<std::mutex> lk(node_ids_mu_);
+    return num_workers_;
+  }
   /** \brief Returns the number of server nodes */
-  int num_servers() const { return num_servers_; }
+  int num_servers() const {
+    std::lock_guard<std::mutex> lk(node_ids_mu_);
+    return num_servers_;
+  }
   /** \brief Returns the rank of this node in its group
    *
    * Each worker will have a unique rank within [0, NumWorkers()). So are
@@ -190,6 +218,7 @@ class Postoffice {
   // app_id -> (customer_id -> customer pointer)
   std::unordered_map<int, std::unordered_map<int, Customer*>> customers_;
   std::unordered_map<int, std::vector<int>> node_ids_;
+  mutable std::mutex node_ids_mu_; //modify the node_ids_
   std::mutex server_key_ranges_mu_;
   std::vector<Range> server_key_ranges_;
   bool is_worker_, is_server_, is_scheduler_;

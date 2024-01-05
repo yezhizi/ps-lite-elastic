@@ -80,6 +80,11 @@ class Van {
    */
   inline bool IsReady() { return ready_; }
 
+
+  inline bool IsTopoUpdated() { if (is_scheduler_) return true; 
+                                else return topoUpdated_; 
+                                }
+
  protected:
   /**
    * \brief connect to a node
@@ -136,6 +141,7 @@ class Van {
   // node's address string (i.e. ip:port) -> node id
   // this map is updated when ip:port is received for the first time
   std::unordered_map<std::string, int> connected_nodes_;
+  std::mutex connected_nodes_mu_;
   // maps the id of node which is added later to the id of node
   // which is with the same ip:port and added first
   std::unordered_map<int, int> shared_node_mapping_;
@@ -156,6 +162,8 @@ class Van {
   int drop_rate_ = 0;
   std::atomic<int> timestamp_{0};
   int init_stage = 0;
+
+  std::atomic<bool> topoUpdated_{false};
 
   /**
    * \brief processing logic of AddNode message for scheduler

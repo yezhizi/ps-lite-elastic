@@ -17,10 +17,10 @@ void Postoffice::InitEnvironment() {
   const char* val = NULL;
   std::string van_type = GetEnv("DMLC_PS_VAN_TYPE", "zmq");
   van_ = Van::Create(van_type);
-  val = CHECK_NOTNULL(Environment::Get()->find("DMLC_NUM_WORKER"));
-  num_workers_ = atoi(val);
-  val =  CHECK_NOTNULL(Environment::Get()->find("DMLC_NUM_SERVER"));
-  num_servers_ = atoi(val);
+  // val = CHECK_NOTNULL(Environment::Get()->find("DMLC_NUM_WORKER"));
+  // num_workers_ = atoi(val);
+  // val =  CHECK_NOTNULL(Environment::Get()->find("DMLC_NUM_SERVER"));
+  // num_servers_ = atoi(val);
   val = CHECK_NOTNULL(Environment::Get()->find("DMLC_ROLE"));
   std::string role(val);
   is_worker_ = role == "worker";
@@ -42,28 +42,28 @@ void Postoffice::Start(int customer_id, const char* argv0, const bool do_barrier
 
     //TODO : how to modify ids?
     // init node info.
-    for (int i = 0; i < num_workers_; ++i) {
-      int id = WorkerRankToID(i);
-      for (int g : {id, kWorkerGroup, kWorkerGroup + kServerGroup,
-                    kWorkerGroup + kScheduler,
-                    kWorkerGroup + kServerGroup + kScheduler}) {
-        node_ids_[g].push_back(id);
-      }
-    }
+    // for (int i = 0; i < num_workers_; ++i) {
+    //   int id = WorkerRankToID(i);
+    //   for (int g : {id, kWorkerGroup, kWorkerGroup + kServerGroup,
+    //                 kWorkerGroup + kScheduler,
+    //                 kWorkerGroup + kServerGroup + kScheduler}) {
+    //     node_ids_[g].push_back(id);
+    //   }
+    // }
 
-    for (int i = 0; i < num_servers_; ++i) {
-      int id = ServerRankToID(i);
-      for (int g : {id, kServerGroup, kWorkerGroup + kServerGroup,
-                    kServerGroup + kScheduler,
-                    kWorkerGroup + kServerGroup + kScheduler}) {
-        node_ids_[g].push_back(id);
-      }
-    }
+    // for (int i = 0; i < num_servers_; ++i) {
+    //   int id = ServerRankToID(i);
+    //   for (int g : {id, kServerGroup, kWorkerGroup + kServerGroup,
+    //                 kServerGroup + kScheduler,
+    //                 kWorkerGroup + kServerGroup + kScheduler}) {
+    //     node_ids_[g].push_back(id);
+    //   }
+    // }
 
-    for (int g : {kScheduler, kScheduler + kServerGroup + kWorkerGroup,
-                  kScheduler + kWorkerGroup, kScheduler + kServerGroup}) {
-      node_ids_[g].push_back(kScheduler);
-    }
+    // for (int g : {kScheduler, kScheduler + kServerGroup + kWorkerGroup,
+    //               kScheduler + kWorkerGroup, kScheduler + kServerGroup}) {
+    //   node_ids_[g].push_back(kScheduler);
+    // }
     init_stage_++;
   }
   start_mu_.unlock();
