@@ -39,31 +39,6 @@ void Postoffice::Start(int customer_id, const char* argv0, const bool do_barrier
     } else {
       dmlc::InitLogging("ps-lite\0");
     }
-
-    //TODO : how to modify ids?
-    // init node info.
-    // for (int i = 0; i < num_workers_; ++i) {
-    //   int id = WorkerRankToID(i);
-    //   for (int g : {id, kWorkerGroup, kWorkerGroup + kServerGroup,
-    //                 kWorkerGroup + kScheduler,
-    //                 kWorkerGroup + kServerGroup + kScheduler}) {
-    //     node_ids_[g].push_back(id);
-    //   }
-    // }
-
-    // for (int i = 0; i < num_servers_; ++i) {
-    //   int id = ServerRankToID(i);
-    //   for (int g : {id, kServerGroup, kWorkerGroup + kServerGroup,
-    //                 kServerGroup + kScheduler,
-    //                 kWorkerGroup + kServerGroup + kScheduler}) {
-    //     node_ids_[g].push_back(id);
-    //   }
-    // }
-
-    // for (int g : {kScheduler, kScheduler + kServerGroup + kWorkerGroup,
-    //               kScheduler + kWorkerGroup, kScheduler + kServerGroup}) {
-    //   node_ids_[g].push_back(kScheduler);
-    // }
     init_stage_++;
   }
   start_mu_.unlock();

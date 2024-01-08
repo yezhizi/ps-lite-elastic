@@ -18,46 +18,91 @@ namespace ps {
  */
 class Postoffice {
  public:
-
   void clear_nodes() {
     std::lock_guard<std::mutex> lk(node_ids_mu_);
     node_ids_.clear();
     for (int g : {kScheduler, kScheduler + kServerGroup + kWorkerGroup,
-              kScheduler + kWorkerGroup, kScheduler + kServerGroup}) {
+                  kScheduler + kWorkerGroup, kScheduler + kServerGroup}) {
       node_ids_[g].push_back(kScheduler);
     }
-    
-
+    num_servers_ = 0;
+    num_workers_ = 0;
   }
-  void add_server(const std::vector<int> & server_ids) {
+  void add_server(const std::vector<int>& server_ids) {
     std::lock_guard<std::mutex> lk(node_ids_mu_);
     for (int id : server_ids) {
       for (int g : {id, kServerGroup, kWorkerGroup + kServerGroup,
                     kServerGroup + kScheduler,
                     kWorkerGroup + kServerGroup + kScheduler}) {
-        node_ids_[g].push_back(id);
+        if (std::find(node_ids_[g].begin(), node_ids_[g].end(), id) ==
+            node_ids_[g].end()) {
+          node_ids_[g].push_back(id);
+          ++num_servers_;
+        }
       }
     }
-    num_servers_ += server_ids.size();
   }
-  void add_worker(const std::vector<int> & worker_ids) {
+  void add_worker(const std::vector<int>& worker_ids) {
     std::lock_guard<std::mutex> lk(node_ids_mu_);
     for (int id : worker_ids) {
       for (int g : {id, kWorkerGroup, kWorkerGroup + kServerGroup,
                     kWorkerGroup + kScheduler,
                     kWorkerGroup + kServerGroup + kScheduler}) {
-        node_ids_[g].push_back(id);
+        if (std::find(node_ids_[g].begin(), node_ids_[g].end(), id) ==
+            node_ids_[g].end()) {
+          node_ids_[g].push_back(id);
+          ++num_workers_;
+        }
       }
     }
-    num_workers_ += worker_ids.size();
+  }
+  void AddNodes(const std::vector<int>& node_ids, const Node::Role role) {
+    std::lock_guard<std::mutex> lk(node_ids_mu_);
+    const int node_group = role == Node::SERVER ? kServerGroup : kWorkerGroup;
+    const int other_group = role == Node::SERVER ? kWorkerGroup : kServerGroup;
+    for (int id : node_ids) {
+      for (int g :
+           {id, node_group, node_group + kScheduler, node_group + other_group,
+            node_group + kScheduler + other_group}) {
+        if (std::find(node_ids_[g].begin(), node_ids_[g].end(), id) ==
+            node_ids_[g].end()) {
+          node_ids_[g].push_back(id);
+          if (role == Node::SERVER) {
+            ++num_servers_;
+          } else {
+            ++num_workers_;
+          }
+        }
+      }
+    }
+  }
+  int GenNextID(Node::Role role) {
+    CHECK(role == Node::SERVER || role == Node::WORKER);
+    int node_group = role == Node::SERVER ? kServerGroup : kWorkerGroup;
+    int id_diff = role == Node::SERVER ? 8 : 9;
+    std::lock_guard<std::mutex> lk(node_ids_mu_);
+    // woker id = rank * 2 + 9; server id = rank * 2 + 8
+    std::vector<int>& ids = node_ids_[node_group];
+    std::sort(ids.begin(), ids.end());
+    int id = 0;
+    for (int i = 0; i < ids.size(); ++i) {
+      if (ids[i] != i * 2 + id_diff) {
+        id = i * 2 + id_diff;
+        break;
+      }
+    }
+    if (id == 0) {
+      id = ids.size() * 2 + id_diff;
+    }
+    return id;
   }
 
- 
   /**
    * \brief return the singleton object
    */
   static Postoffice* Get() {
-    static Postoffice e; return &e;
+    static Postoffice e;
+    return &e;
   }
   /** \brief get the van */
   Van* van() { return van_; }
@@ -73,7 +118,8 @@ class Postoffice {
    * \brief terminate the system
    *
    * All nodes should call this function before existing.
-   * \param do_barrier whether to do block until every node is finalized, default true.
+   * \param do_barrier whether to do block until every node is finalized,
+   * default true.
    */
   void Finalize(const int customer_id, const bool do_barrier = true);
   /**
@@ -98,7 +144,7 @@ class Postoffice {
    * if it is a  node group, return the list of node ids in this
    * group. otherwise, return {node_id}
    */
-  //to be thread safe
+  // to be thread safe
   const std::vector<int>& GetNodeIDs(int node_id) const {
     std::lock_guard<std::mutex> lk(node_ids_mu_);
     const auto it = node_ids_.find(node_id);
@@ -128,25 +174,19 @@ class Postoffice {
    * \endcode
    * \param cb the callback function
    */
-  void RegisterExitCallback(const Callback& cb) {
-    exit_callback_ = cb;
-  }
+  void RegisterExitCallback(const Callback& cb) { exit_callback_ = cb; }
   /**
    * \brief convert from a worker rank into a node id
    * \param rank the worker rank
    */
-  //TODO: delete this function
-  static inline int WorkerRankToID(int rank) {
-    return rank * 2 + 9;
-  }
+  // TODO: delete this function
+  static inline int WorkerRankToID(int rank) { return rank * 2 + 9; }
   /**
    * \brief convert from a server rank into a node id
    * \param rank the server rank
    */
-  //TODO: delete this function
-  static inline int ServerRankToID(int rank) {
-    return rank * 2 + 8;
-  }
+  // TODO: delete this function
+  static inline int ServerRankToID(int rank) { return rank * 2 + 8; }
   /**
    * \brief convert from a node id into a server or worker rank
    * \param id the node id
@@ -218,13 +258,13 @@ class Postoffice {
   // app_id -> (customer_id -> customer pointer)
   std::unordered_map<int, std::unordered_map<int, Customer*>> customers_;
   std::unordered_map<int, std::vector<int>> node_ids_;
-  mutable std::mutex node_ids_mu_; //modify the node_ids_
+  mutable std::mutex node_ids_mu_;  // modify the node_ids_
   std::mutex server_key_ranges_mu_;
   std::vector<Range> server_key_ranges_;
   bool is_worker_, is_server_, is_scheduler_;
   int num_servers_, num_workers_;
-  std::mutex num_servers_mu_; //modify the number of servers
-  std::unordered_map<int, std::unordered_map<int, bool> > barrier_done_;
+  std::mutex num_servers_mu_;  // modify the number of servers
+  std::unordered_map<int, std::unordered_map<int, bool>> barrier_done_;
   int verbose_;
   std::mutex barrier_mu_;
   std::condition_variable barrier_cond_;
@@ -233,7 +273,8 @@ class Postoffice {
   int init_stage_ = 0;
   std::unordered_map<int, time_t> heartbeats_;
   Callback exit_callback_;
-  /** \brief Holding a shared_ptr to prevent it from being destructed too early */
+  /** \brief Holding a shared_ptr to prevent it from being destructed too early
+   */
   std::shared_ptr<Environment> env_ref_;
   time_t start_time_;
   DISALLOW_COPY_AND_ASSIGN(Postoffice);

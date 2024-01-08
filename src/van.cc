@@ -32,7 +32,7 @@ Van* Van::Create(const std::string& type) {
   } else if (type == "p3") {
     return new P3Van();
 #ifdef DMLC_USE_IBVERBS
-} else if (type == "ibverbs") {
+  } else if (type == "ibverbs") {
     return new IBVerbsVan();
 #endif
   } else {
@@ -50,72 +50,73 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
                                            Meta* recovery_nodes) {
   recovery_nodes->control.cmd = Control::ADD_NODE;
   time_t t = time(NULL);
-  size_t num_nodes =
-      Postoffice::Get()->num_servers() + Postoffice::Get()->num_workers();
-  if (true || nodes->control.node.size() == num_nodes) {
-    // sort the nodes according their ip and port,
-    std::sort(nodes->control.node.begin(), nodes->control.node.end(),
-              [](const Node& a, const Node& b) {
-                return (a.hostname.compare(b.hostname) | (a.port < b.port)) > 0;
-              });
-    // assign node rank
-    int server_rank = 0;
-    int worker_rank = 0;
-    std::vector<int> server_ids;
-    std::vector<int> worker_ids;
-    for (auto& node : nodes->control.node) {
+  // support to add more than 1 nodes at once
+  std::vector<std::reference_wrapper<Node>> comingNodes;
+  for (auto& node : nodes->control.node) {
+    if (node.id == Meta::kEmpty) {
+      comingNodes.push_back(node);
+    }
+  }
+
+  if (recovery_nodes->control.node.empty()) {
+    CHECK_EQ(comingNodes.size(), 1);
+    for (auto& node_ref : comingNodes) {
+      auto& node = node_ref.get();
+      auto& role = node.role;
+      if (role == Node::SCHEDULER) continue;
+
       std::string node_host_ip =
           node.hostname + ":" + std::to_string(node.port);
-      if (true||connected_nodes_.find(node_host_ip) == connected_nodes_.end()) {
-        if (node.role == Node::SCHEDULER) continue;
-        // CHECK_EQ(node.id, Node::kEmpty);
-        int id = node.role == Node::SERVER
-                     ? Postoffice::ServerRankToID(server_rank)
-                     : Postoffice::WorkerRankToID(worker_rank);
-        PS_VLOG(1) << "assign rank=" << id << " to node " << node.DebugString();
+      if (connected_nodes_.find(node_host_ip) == connected_nodes_.end()) {
+        auto id = Postoffice::Get()->GenNextID(role);
         node.id = id;
+        PS_VLOG(1) << "assign id=" << id << " to node " << node.DebugString();
         Connect(node);
         Postoffice::Get()->UpdateHeartbeat(node.id, t);
         connected_nodes_[node_host_ip] = id;
-
-        if (node.role == Node::SERVER) {
-          server_ids.push_back(id);
-          ++server_rank;
-        } 
-        if (node.role == Node::WORKER){
-          worker_ids.push_back(id);
-          ++worker_rank;
-        }
       } else {
+        LOG(WARNING) << "node " << node.DebugString()
+                     << " already connected before";
         int id = node.role == Node::SERVER
                      ? Postoffice::ServerRankToID(num_servers_)
                      : Postoffice::WorkerRankToID(num_workers_);
         shared_node_mapping_[id] = connected_nodes_[node_host_ip];
         node.id = connected_nodes_[node_host_ip];
       }
-      if (node.role == Node::SERVER) num_servers_++;
-      if (node.role == Node::WORKER) num_workers_++;
+      if (role == Node::SERVER) num_servers_++;
+      if (role == Node::WORKER) num_workers_++;
+      // add to nodes in Postoffice
+      Postoffice::Get()->AddNodes({node.id}, role);
     }
-    Postoffice::Get()->clear_nodes();
-    Postoffice::Get()->add_server(server_ids);
-    Postoffice::Get()->add_worker(worker_ids);
-
-    nodes->control.node.push_back(my_node_);
-    nodes->control.cmd = Control::ADD_NODE;
     Message back;
-    back.meta = *nodes;
+    
+    // send to all nodes except the new node
+    back.meta.control.cmd = Control::ADD_NODE;
+    for (auto& node_ref : comingNodes) {
+      auto& node = node_ref.get();
+      back.meta.control.node.push_back(node);
+    }
+    int coming_node_id = comingNodes[0].get().id;
     for (int r : Postoffice::Get()->GetNodeIDs(kWorkerGroup + kServerGroup)) {
       int recver_id = r;
-      if (true||shared_node_mapping_.find(r) == shared_node_mapping_.end()) {
-        back.meta.recver = recver_id;
-        back.meta.timestamp = timestamp_++;
-        Send(back);
+      if (r != coming_node_id) {
+        if (shared_node_mapping_.find(r) == shared_node_mapping_.end()) {
+          back.meta.recver = recver_id;
+          back.meta.timestamp = timestamp_++;
+          Send(back);
+        }
       }
     }
+    // send to the new node
+    nodes->control.cmd = Control::ADD_NODE;
+    back.meta = *nodes;
+    back.meta.recver = coming_node_id;
+    back.meta.timestamp = timestamp_++;
+    Send(back);
     PS_VLOG(1) << "the scheduler is connected to " << num_workers_
                << " workers and " << num_servers_ << " servers";
     ready_ = true;
-  } else if (!recovery_nodes->control.node.empty()) {
+  } else {
     auto dead_nodes = Postoffice::Get()->GetDeadNodes(heartbeat_timeout_);
     std::unordered_set<int> dead_set(dead_nodes.begin(), dead_nodes.end());
     // send back the recovery node
@@ -143,58 +144,46 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
 void Van::UpdateLocalID(Message* msg, std::unordered_set<int>* deadnodes_set,
                         Meta* nodes, Meta* recovery_nodes) {
   auto& ctrl = msg->meta.control;
-  size_t num_nodes =
-      Postoffice::Get()->num_servers() + Postoffice::Get()->num_workers();
   // assign an id
   if (msg->meta.sender == Meta::kEmpty) {
-    CHECK(is_scheduler_);
+    CHECK(is_scheduler_);  // only scheduler can assign id
     CHECK_EQ(ctrl.node.size(), 1);
+    // Add the scheduler node to the nodes list
+    if (nodes->control.node.empty()) nodes->control.node.push_back(my_node_);
 
-    nodes->control.node.push_back(ctrl.node[0]);
-    return ; 
-
-    //TODO: only for addition of nodes. var num_nodes is deprecated.
-    if (nodes->control.node.size() < num_nodes) {
-      nodes->control.node.push_back(ctrl.node[0]);
-    } else {
-      // some node dies and restarts
-      CHECK(ready_.load());
-      for (size_t i = 0; i < nodes->control.node.size() - 1; ++i) {
-        const auto& node = nodes->control.node[i];
-        if (deadnodes_set->find(node.id) != deadnodes_set->end() &&
-            node.role == ctrl.node[0].role) {
-          auto& recovery_node = ctrl.node[0];
-          // assign previous node id
-          recovery_node.id = node.id;
-          recovery_node.is_recovery = true;
-          PS_VLOG(1) << "replace dead node " << node.DebugString()
-                     << " by node " << recovery_node.DebugString();
-          nodes->control.node[i] = recovery_node;
-          recovery_nodes->control.node.push_back(recovery_node);
-          break;
-        }
+    bool isNewNode = true;
+    for (size_t i = 0; i < nodes->control.node.size() - 1; ++i) {
+      const auto& node = nodes->control.node[i];
+      if (deadnodes_set->find(node.id) != deadnodes_set->end() &&
+          node.role == ctrl.node[0].role) {
+        auto& recovery_node = ctrl.node[0];
+        // assign previous node id
+        recovery_node.id = node.id;
+        recovery_node.is_recovery = true;
+        PS_VLOG(1) << "replace dead node " << node.DebugString() << " by node "
+                   << recovery_node.DebugString();
+        nodes->control.node[i] = recovery_node;
+        recovery_nodes->control.node.push_back(recovery_node);
+        isNewNode = false;
+        break;
       }
     }
+    if (isNewNode) nodes->control.node.push_back(ctrl.node[0]);
   }
-
 
   // update my id
   for (size_t i = 0; i < ctrl.node.size(); ++i) {
     const auto& node = ctrl.node[i];
     if (my_node_.hostname == node.hostname && my_node_.port == node.port) {
-      
-      //always update the my_node_ info
-      if (true ||getenv("DMLC_RANK") == nullptr || my_node_.id == Meta::kEmpty) {
-        my_node_ = node;
-        //keep the IDtoRank and RanktoID mapping
-        //TODO: Add: lock?
-        std::string rank = std::to_string(Postoffice::IDtoRank(node.id));
+      // always update the my_node_ info
+      my_node_ = node;
+      // keep the IDtoRank and RanktoID mapping
+      std::string rank = std::to_string(Postoffice::IDtoRank(node.id));
 #ifdef _MSC_VER
-        _putenv_s("DMLC_RANK", rank.c_str());
+      _putenv_s("DMLC_RANK", rank.c_str());
 #else
-        setenv("DMLC_RANK", rank.c_str(), true);
+      setenv("DMLC_RANK", rank.c_str(), true);
 #endif
-      }
     }
   }
 }
@@ -264,8 +253,7 @@ void Van::ProcessDataMsg(Message* msg) {
 
 void Van::ProcessAddNodeCommand(Message* msg, Meta* nodes,
                                 Meta* recovery_nodes) {
-  
-  topoUpdated_  = false;
+  topoUpdated_ = false;
   auto dead_nodes = Postoffice::Get()->GetDeadNodes(heartbeat_timeout_);
   std::unordered_set<int> dead_set(dead_nodes.begin(), dead_nodes.end());
   auto& ctrl = msg->meta.control;
@@ -275,38 +263,32 @@ void Van::ProcessAddNodeCommand(Message* msg, Meta* nodes,
   if (is_scheduler_) {
     ProcessAddNodeCommandAtScheduler(msg, nodes, recovery_nodes);
   } else {
-    std::lock_guard<std::mutex> lk(connected_nodes_mu_);
-    connected_nodes_.clear();
     std::vector<int> server_ids;
     std::vector<int> worker_ids;
+    // Incremental Update
     for (const auto& node : ctrl.node) {
       std::string addr_str = node.hostname + ":" + std::to_string(node.port);
-      //TODO: only for addition of  nodes. 
       if (connected_nodes_.find(addr_str) == connected_nodes_.end()) {
-        // will not connect the node if the type is same
-        Connect(node); 
-        connected_nodes_[addr_str] = node.id;
-      }else{
-        connected_nodes_[addr_str] = node.id;
+        // Connect() don't connect the node if the role  is same
+        Connect(node);
+        if (!node.is_recovery && node.role == Node::SERVER) {
+          ++num_servers_;
+          server_ids.push_back(node.id);
+        };
+        if (!node.is_recovery && node.role == Node::WORKER) {
+          ++num_workers_;
+          worker_ids.push_back(node.id);
+        };
       }
-      //TODO: only for additon of nodes.
-      if (!node.is_recovery && node.role == Node::SERVER) {
-        ++num_servers_;
-        server_ids.push_back(node.id);
-      };
-      if (!node.is_recovery && node.role == Node::WORKER) {
-        ++num_workers_;
-        worker_ids.push_back(node.id);
-      };
-    
+      connected_nodes_[addr_str] = node.id;
     }
-    Postoffice::Get()->add_server(server_ids);
-    Postoffice::Get()->add_worker(worker_ids);
-    PS_VLOG(1) << my_node_.ShortDebugString() << " is connected to others";
-    //打印连接的节点信息
     for (auto& it : connected_nodes_) {
       PS_VLOG(1) << "connected to " << it.first << " with id=" << it.second;
     }
+
+    Postoffice::Get()->AddNodes(server_ids, Node::SERVER);
+    Postoffice::Get()->AddNodes(worker_ids, Node::WORKER);
+
     ready_ = true;
     topoUpdated_ = true;
   }
@@ -450,10 +432,7 @@ int Van::Send(const Message& msg) {
 }
 
 void Van::Receiving() {
-  //TODO: need modify the var nodes when scale in
   Meta nodes;
-  Meta recovery_nodes;  // store recovery nodes
-  recovery_nodes.control.cmd = Control::ADD_NODE;
 
   while (true) {
     Message msg;
@@ -474,7 +453,6 @@ void Van::Receiving() {
     }
     // duplicated message
     if (resender_ && resender_->AddIncomming(msg)) continue;
-
     if (!msg.meta.control.empty()) {
       // control msg
       auto& ctrl = msg.meta.control;
@@ -482,6 +460,8 @@ void Van::Receiving() {
         ProcessTerminateCommand();
         break;
       } else if (ctrl.cmd == Control::ADD_NODE) {
+        Meta recovery_nodes;  // store recovery nodes
+        recovery_nodes.control.cmd = Control::ADD_NODE;
         ProcessAddNodeCommand(&msg, &nodes, &recovery_nodes);
       } else if (ctrl.cmd == Control::BARRIER) {
         ProcessBarrierCommand(&msg);

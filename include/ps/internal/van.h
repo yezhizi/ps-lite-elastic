@@ -80,10 +80,12 @@ class Van {
    */
   inline bool IsReady() { return ready_; }
 
-
-  inline bool IsTopoUpdated() { if (is_scheduler_) return true; 
-                                else return topoUpdated_; 
-                                }
+  inline bool IsTopoUpdated() {
+    if (is_scheduler_)
+      return true;
+    else
+      return topoUpdated_;
+  }
 
  protected:
   /**
@@ -141,7 +143,6 @@ class Van {
   // node's address string (i.e. ip:port) -> node id
   // this map is updated when ip:port is received for the first time
   std::unordered_map<std::string, int> connected_nodes_;
-  std::mutex connected_nodes_mu_;
   // maps the id of node which is added later to the id of node
   // which is with the same ip:port and added first
   std::unordered_map<int, int> shared_node_mapping_;
@@ -198,8 +199,8 @@ class Van {
 
   /**
    * \brief called by ProcessAddNodeCommand, in scheduler it assigns an id to
-   * the newly added node; in other nodes, it updates the node id with what is
-   * received from scheduler
+   * the newly added node, and collect this nodes into the Meta * nodes;
+   * in other nodes, it updates the node id with what is received from scheduler
    */
   void UpdateLocalID(Message *msg, std::unordered_set<int> *deadnodes_set,
                      Meta *nodes, Meta *recovery_nodes);
