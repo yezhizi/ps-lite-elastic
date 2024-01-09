@@ -18,84 +18,13 @@ namespace ps {
  */
 class Postoffice {
  public:
-  void clear_nodes() {
-    std::lock_guard<std::mutex> lk(node_ids_mu_);
-    node_ids_.clear();
-    for (int g : {kScheduler, kScheduler + kServerGroup + kWorkerGroup,
-                  kScheduler + kWorkerGroup, kScheduler + kServerGroup}) {
-      node_ids_[g].push_back(kScheduler);
-    }
-    num_servers_ = 0;
-    num_workers_ = 0;
-  }
-  void add_server(const std::vector<int>& server_ids) {
-    std::lock_guard<std::mutex> lk(node_ids_mu_);
-    for (int id : server_ids) {
-      for (int g : {id, kServerGroup, kWorkerGroup + kServerGroup,
-                    kServerGroup + kScheduler,
-                    kWorkerGroup + kServerGroup + kScheduler}) {
-        if (std::find(node_ids_[g].begin(), node_ids_[g].end(), id) ==
-            node_ids_[g].end()) {
-          node_ids_[g].push_back(id);
-          ++num_servers_;
-        }
-      }
-    }
-  }
-  void add_worker(const std::vector<int>& worker_ids) {
-    std::lock_guard<std::mutex> lk(node_ids_mu_);
-    for (int id : worker_ids) {
-      for (int g : {id, kWorkerGroup, kWorkerGroup + kServerGroup,
-                    kWorkerGroup + kScheduler,
-                    kWorkerGroup + kServerGroup + kScheduler}) {
-        if (std::find(node_ids_[g].begin(), node_ids_[g].end(), id) ==
-            node_ids_[g].end()) {
-          node_ids_[g].push_back(id);
-          ++num_workers_;
-        }
-      }
-    }
-  }
-  void AddNodes(const std::vector<int>& node_ids, const Node::Role role) {
-    std::lock_guard<std::mutex> lk(node_ids_mu_);
-    const int node_group = role == Node::SERVER ? kServerGroup : kWorkerGroup;
-    const int other_group = role == Node::SERVER ? kWorkerGroup : kServerGroup;
-    for (int id : node_ids) {
-      for (int g :
-           {id, node_group, node_group + kScheduler, node_group + other_group,
-            node_group + kScheduler + other_group}) {
-        if (std::find(node_ids_[g].begin(), node_ids_[g].end(), id) ==
-            node_ids_[g].end()) {
-          node_ids_[g].push_back(id);
-          if (role == Node::SERVER) {
-            ++num_servers_;
-          } else {
-            ++num_workers_;
-          }
-        }
-      }
-    }
-  }
-  int GenNextID(Node::Role role) {
-    CHECK(role == Node::SERVER || role == Node::WORKER);
-    int node_group = role == Node::SERVER ? kServerGroup : kWorkerGroup;
-    int id_diff = role == Node::SERVER ? 8 : 9;
-    std::lock_guard<std::mutex> lk(node_ids_mu_);
-    // woker id = rank * 2 + 9; server id = rank * 2 + 8
-    std::vector<int>& ids = node_ids_[node_group];
-    std::sort(ids.begin(), ids.end());
-    int id = 0;
-    for (int i = 0; i < ids.size(); ++i) {
-      if (ids[i] != i * 2 + id_diff) {
-        id = i * 2 + id_diff;
-        break;
-      }
-    }
-    if (id == 0) {
-      id = ids.size() * 2 + id_diff;
-    }
-    return id;
-  }
+  void clear_nodes();
+
+  void AddNodes(const std::vector<int>& node_ids, const Node::Role role);
+
+  void RemoveNodes(const std::vector<int> node_ids, const Node::Role role);
+
+  int GenNextID(Node::Role role);
 
   /**
    * \brief return the singleton object

@@ -64,6 +64,7 @@ class Van {
     return my_node_;
   }
 
+  void SendDelMsg();
   /**
    * \brief stop van
    * stop receiving threads
@@ -92,6 +93,8 @@ class Van {
    * \brief connect to a node
    */
   virtual void Connect(const Node &node) = 0;
+
+  virtual void Disconnect(const Node &node){};
 
   /**
    * \brief bind to my node
@@ -171,11 +174,14 @@ class Van {
    */
   void ProcessAddNodeCommandAtScheduler(Message *msg, Meta *nodes,
                                         Meta *recovery_nodes);
-
+  void ProcessDelNodeCommandAtScheduler(Message *msg, Meta *nodes);
+  
   /**
    * \brief processing logic of Terminate message
    */
   void ProcessTerminateCommand();
+
+  void ProcessDelNodeCommand(Message *msg, Meta *nodes);
 
   /**
    * \brief processing logic of AddNode message (run on each node)

@@ -89,6 +89,26 @@ class ZMQVan : public Van {
     }
     return port;
   }
+  
+  void Disconnect(const Node& node ){
+    CHECK_NE(node.id, node.kEmpty);
+    CHECK_NE(node.port, node.kEmpty);
+    CHECK(node.hostname.size());
+    int id = node.id;
+    auto it = senders_.find(id);
+    if (it != senders_.end()) {
+      if(is_scheduler_){
+        //scheduler should wait to send the DEL_NODE ack to the Node
+        zmq_close(it->second);
+      }else{
+        int linger = 0;
+        int rc = zmq_setsockopt(it->second, ZMQ_LINGER, &linger, sizeof(linger));
+        CHECK(rc == 0 || errno == ETERM);
+        CHECK_EQ(zmq_close(it->second), 0);
+      }
+    }
+    senders_.erase(id);
+  }
 
   void Connect(const Node& node) override {
     CHECK_NE(node.id, node.kEmpty);
