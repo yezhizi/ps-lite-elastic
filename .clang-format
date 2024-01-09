@@ -1,0 +1,6 @@
+# .clang-format file
+
+Language:        Cpp
+BasedOnStyle:    Google
+# 不排序头文件
+SortIncludes:    false
