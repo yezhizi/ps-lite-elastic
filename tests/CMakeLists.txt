@@ -1,6 +1,9 @@
 add_executable(connection_test test_connection.cc)
 target_link_libraries(connection_test pslite)
 
+add_executable(connection_test_gracefulexit test_connection_gracefulexit.cc)
+target_link_libraries(connection_test_gracefulexit pslite)
+
 add_executable(simple_app_test test_simple_app.cc)
 target_link_libraries(simple_app_test pslite)
 
