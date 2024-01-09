@@ -14,3 +14,6 @@ tests/test_*
 cmake-build-debug/
 CMakeFiles/
 recommonmark/
+
+!/.clang-format
+!/tests/test_*.cc
