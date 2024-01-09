@@ -11,6 +11,8 @@
 #include "ps/internal/van.h"
 #include "ps/sarray.h"
 
+#include "ps/internal/debug_logging.h"
+
 #include "./meta.pb.h"
 #include "./network_utils.h"
 #include "./ibverbs_van.h"
@@ -165,8 +167,6 @@ void Van::ProcessDelNodeCommandAtScheduler(Message* msg, Meta* nodes) {
   }
   // remove the node from nodes
   nodes->control.node.erase(it);
-  LOG(INFO) << "the scheduler is connected to " << num_workers_ << " workers "
-            << "and " << num_servers_ << " servers";
 }
 
 void Van::UpdateLocalID(Message* msg, std::unordered_set<int>* deadnodes_set,
@@ -317,6 +317,12 @@ void Van::ProcessDelNodeCommand(Message* msg, Meta* nodes) {
   Postoffice::Get()->RemoveNodes(worker_ids, Node::WORKER);
   topoUpdated_ = true;
 
+  LOG_MAP(" id=") << "connected nodes" << connected_nodes_;
+  if (is_scheduler_){
+    LOG(INFO) << "the scheduler is connected to " << num_workers_
+              << " workers and " << num_servers_ << " servers";
+  }
+
 }
 
 void Van::ProcessAddNodeCommand(Message* msg, Meta* nodes,
@@ -350,9 +356,7 @@ void Van::ProcessAddNodeCommand(Message* msg, Meta* nodes,
       }
       connected_nodes_[addr_str] = node.id;
     }
-    for (auto& it : connected_nodes_) {
-      PS_VLOG(1) << "connected to " << it.first << " with id=" << it.second;
-    }
+    LOG_MAP(" id=")<<"connected nodes"<<connected_nodes_;
 
     Postoffice::Get()->AddNodes(server_ids, Node::SERVER);
     Postoffice::Get()->AddNodes(worker_ids, Node::WORKER);
