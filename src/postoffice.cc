@@ -9,10 +9,8 @@
 #include "ps/base.h"
 
 namespace ps {
-Postoffice::Postoffice() {
-  env_ref_ = Environment::_GetSharedRef();
-}
-//TODO : numbers will be not needed or will be changed
+Postoffice::Postoffice() { env_ref_ = Environment::_GetSharedRef(); }
+// TODO : numbers will be not needed or will be changed
 void Postoffice::InitEnvironment() {
   const char* val = NULL;
   std::string van_type = GetEnv("DMLC_PS_VAN_TYPE", "zmq");
@@ -29,7 +27,8 @@ void Postoffice::InitEnvironment() {
   verbose_ = GetEnv("PS_VERBOSE", 0);
 }
 
-void Postoffice::Start(int customer_id, const char* argv0, const bool do_barrier) {
+void Postoffice::Start(int customer_id, const char* argv0,
+                       const bool do_barrier) {
   start_mu_.lock();
   if (init_stage_ == 0) {
     InitEnvironment();
@@ -54,11 +53,13 @@ void Postoffice::Start(int customer_id, const char* argv0, const bool do_barrier
   }
   start_mu_.unlock();
   // do a barrier here
-  if (do_barrier) Barrier(customer_id, kWorkerGroup + kServerGroup + kScheduler);
+  if (do_barrier)
+    Barrier(customer_id, kWorkerGroup + kServerGroup + kScheduler);
 }
 
 void Postoffice::Finalize(const int customer_id, const bool do_barrier) {
-  if (do_barrier) Barrier(customer_id, kWorkerGroup + kServerGroup + kScheduler);
+  if (do_barrier)
+    Barrier(customer_id, kWorkerGroup + kServerGroup + kScheduler);
   if (customer_id == 0) {
     num_workers_ = 0;
     num_servers_ = 0;
@@ -73,19 +74,17 @@ void Postoffice::Finalize(const int customer_id, const bool do_barrier) {
   }
 }
 
-
 void Postoffice::AddCustomer(Customer* customer) {
   std::lock_guard<std::mutex> lk(mu_);
   int app_id = CHECK_NOTNULL(customer)->app_id();
   // check if the customer id has existed
   int customer_id = CHECK_NOTNULL(customer)->customer_id();
-  CHECK_EQ(customers_[app_id].count(customer_id), (size_t) 0) << "customer_id " \
-    << customer_id << " already exists\n";
+  CHECK_EQ(customers_[app_id].count(customer_id), (size_t)0)
+      << "customer_id " << customer_id << " already exists\n";
   customers_[app_id].insert(std::make_pair(customer_id, customer));
   std::unique_lock<std::mutex> ulk(barrier_mu_);
   barrier_done_[app_id].insert(std::make_pair(customer_id, false));
 }
-
 
 void Postoffice::RemoveCustomer(Customer* customer) {
   std::lock_guard<std::mutex> lk(mu_);
@@ -97,8 +96,8 @@ void Postoffice::RemoveCustomer(Customer* customer) {
   }
 }
 
-
-Customer* Postoffice::GetCustomer(int app_id, int customer_id, int timeout) const {
+Customer* Postoffice::GetCustomer(int app_id, int customer_id,
+                                  int timeout) const {
   Customer* obj = nullptr;
   for (int i = 0; i < timeout * 1000 + 1; ++i) {
     {
@@ -137,19 +136,17 @@ void Postoffice::Barrier(int customer_id, int node_group) {
   req.meta.control.barrier_group = node_group;
   req.meta.timestamp = van_->GetTimestamp();
   van_->Send(req);
-  barrier_cond_.wait(ulk, [this, customer_id] {
-      return barrier_done_[0][customer_id];
-    });
+  barrier_cond_.wait(
+      ulk, [this, customer_id] { return barrier_done_[0][customer_id]; });
 }
 
-//TODO : modify for elastic server number 
+// TODO : modify for elastic server number
 const std::vector<Range>& Postoffice::GetServerKeyRanges() {
   server_key_ranges_mu_.lock();
   if (server_key_ranges_.empty()) {
     for (int i = 0; i < num_servers_; ++i) {
-      server_key_ranges_.push_back(Range(
-          kMaxKey / num_servers_ * i,
-          kMaxKey / num_servers_ * (i+1)));
+      server_key_ranges_.push_back(
+          Range(kMaxKey / num_servers_ * i, kMaxKey / num_servers_ * (i + 1)));
     }
   }
   server_key_ranges_mu_.unlock();
@@ -175,19 +172,94 @@ std::vector<int> Postoffice::GetDeadNodes(int t) {
   if (!van_->IsReady() || t == 0) return dead_nodes;
 
   time_t curr_time = time(NULL);
-  const auto& nodes = is_scheduler_
-    ? GetNodeIDs(kWorkerGroup + kServerGroup)
-    : GetNodeIDs(kScheduler);
+  const auto& nodes = is_scheduler_ ? GetNodeIDs(kWorkerGroup + kServerGroup)
+                                    : GetNodeIDs(kScheduler);
   {
     std::lock_guard<std::mutex> lk(heartbeat_mu_);
     for (int r : nodes) {
       auto it = heartbeats_.find(r);
-      if ((it == heartbeats_.end() || it->second + t < curr_time)
-            && start_time_ + t < curr_time) {
+      if ((it == heartbeats_.end() || it->second + t < curr_time) &&
+          start_time_ + t < curr_time) {
         dead_nodes.push_back(r);
       }
     }
   }
   return dead_nodes;
 }
+void Postoffice::clear_nodes() {
+  std::lock_guard<std::mutex> lk(node_ids_mu_);
+  node_ids_.clear();
+  for (int g : {kScheduler, kScheduler + kServerGroup + kWorkerGroup,
+                kScheduler + kWorkerGroup, kScheduler + kServerGroup}) {
+    node_ids_[g].push_back(kScheduler);
+  }
+  num_servers_ = 0;
+  num_workers_ = 0;
+}
+
+void Postoffice::AddNodes(const std::vector<int>& node_ids,
+                          const Node::Role role) {
+  std::lock_guard<std::mutex> lk(node_ids_mu_);
+  const int node_group = role == Node::SERVER ? kServerGroup : kWorkerGroup;
+  const int other_group = role == Node::SERVER ? kWorkerGroup : kServerGroup;
+  for (int id : node_ids) {
+    for (int g :
+         {id, node_group, node_group + kScheduler, node_group + other_group,
+          node_group + kScheduler + other_group}) {
+      if (std::find(node_ids_[g].begin(), node_ids_[g].end(), id) ==
+          node_ids_[g].end()) {
+        node_ids_[g].push_back(id);
+        if (role == Node::SERVER) {
+          ++num_servers_;
+        } else {
+          ++num_workers_;
+        }
+      }
+    }
+  }
+}
+
+void Postoffice::RemoveNodes(const std::vector<int> node_ids,
+                             const Node::Role role) {
+  std::lock_guard<std::mutex> lk(node_ids_mu_);
+  const int node_group = role == Node::SERVER ? kServerGroup : kWorkerGroup;
+  const int other_group = role == Node::SERVER ? kWorkerGroup : kServerGroup;
+  for (int id : node_ids) {
+    for (int g :
+         {id, node_group, node_group + kScheduler, node_group + other_group,
+          node_group + kScheduler + other_group}) {
+      auto it = std::find(node_ids_[g].begin(), node_ids_[g].end(), id);
+      if (it != node_ids_[g].end()) {
+        node_ids_[g].erase(it);
+        if (role == Node::SERVER) {
+          --num_servers_;
+        } else {
+          --num_workers_;
+        }
+      }
+    }
+  }
+}
+
+int Postoffice::GenNextID(Node::Role role) {
+  CHECK(role == Node::SERVER || role == Node::WORKER);
+  int node_group = role == Node::SERVER ? kServerGroup : kWorkerGroup;
+  int id_diff = role == Node::SERVER ? 8 : 9;
+  std::lock_guard<std::mutex> lk(node_ids_mu_);
+  // woker id = rank * 2 + 9; server id = rank * 2 + 8
+  std::vector<int>& ids = node_ids_[node_group];
+  std::sort(ids.begin(), ids.end());
+  int id = 0;
+  for (int i = 0; i < ids.size(); ++i) {
+    if (ids[i] != i * 2 + id_diff) {
+      id = i * 2 + id_diff;
+      break;
+    }
+  }
+  if (id == 0) {
+    id = ids.size() * 2 + id_diff;
+  }
+  return id;
+}
+
 }  // namespace ps

@@ -89,7 +89,7 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
       Postoffice::Get()->AddNodes({node.id}, role);
     }
     Message back;
-    
+
     // send to all nodes except the new node
     back.meta.control.cmd = Control::ADD_NODE;
     for (auto& node_ref : comingNodes) {
@@ -139,6 +139,34 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
       Send(back);
     }
   }
+}
+
+void Van::ProcessDelNodeCommandAtScheduler(Message* msg, Meta* nodes) {
+  auto& ctrl = msg->meta.control;
+  CHECK_EQ(ctrl.node.size(), 1);
+  auto& outcoming_node = ctrl.node[0];
+  CHECK_NE(outcoming_node.id, Meta::kEmpty) << "node id is empty";
+  auto it = std::find_if(nodes->control.node.begin(), nodes->control.node.end(),
+                         [&outcoming_node](const Node& node) {
+                           return node.id == outcoming_node.id;
+                         });
+  CHECK(it != nodes->control.node.end())
+      << "node " << outcoming_node.DebugString() << " not found";
+  CHECK_EQ(it->hostname, outcoming_node.hostname);
+  CHECK_EQ(it->port, outcoming_node.port);
+
+  // send del node to all nodes
+  Message back;
+  back.meta = msg->meta;
+  for (int r : Postoffice::Get()->GetNodeIDs(kWorkerGroup + kServerGroup)) {
+    back.meta.recver = r;
+    back.meta.timestamp = timestamp_++;
+    Send(back);
+  }
+  // remove the node from nodes
+  nodes->control.node.erase(it);
+  LOG(INFO) << "the scheduler is connected to " << num_workers_ << " workers "
+            << "and " << num_servers_ << " servers";
 }
 
 void Van::UpdateLocalID(Message* msg, std::unordered_set<int>* deadnodes_set,
@@ -249,6 +277,46 @@ void Van::ProcessDataMsg(Message* msg) {
   CHECK(obj) << "timeout (5 sec) to wait App " << app_id << " customer "
              << customer_id << " ready at " << my_node_.role;
   obj->Accept(*msg);
+}
+
+void Van::ProcessDelNodeCommand(Message* msg, Meta* nodes) {
+  topoUpdated_ = false;
+  auto& ctrl = msg->meta.control;
+  auto& outcoming_nodes = ctrl.node;
+  if (is_scheduler_) {
+    ProcessDelNodeCommandAtScheduler(msg, nodes);
+  } else {
+    int myid = my_node_.id;
+    auto it =
+        std::find_if(outcoming_nodes.begin(), outcoming_nodes.end(),
+                     [myid](const Node& node) { return node.id == myid; });
+    if (it != outcoming_nodes.end()) {
+      // I am going to be deleted
+      LOG(INFO) << "Received DEL_NODE command, going to be deleted";
+      ready_ = true;
+      return;
+    }
+  }
+  // update the topo, del the node
+  std::vector<int> server_ids;
+  std::vector<int> worker_ids;
+  for (auto& node : outcoming_nodes) {
+    auto addr_str = node.hostname + ":" + std::to_string(node.port);
+    connected_nodes_.erase(addr_str);
+    Disconnect(node);
+    LOG(INFO) << "Disconnected from " << node.DebugString();
+    if (node.role == Node::SERVER) {
+      server_ids.push_back(node.id);
+      --num_servers_;
+    } else {
+      worker_ids.push_back(node.id);
+      --num_workers_;
+    }
+  }
+  Postoffice::Get()->RemoveNodes(server_ids, Node::SERVER);
+  Postoffice::Get()->RemoveNodes(worker_ids, Node::WORKER);
+  topoUpdated_ = true;
+
 }
 
 void Van::ProcessAddNodeCommand(Message* msg, Meta* nodes,
@@ -398,7 +466,25 @@ void Van::Start(int customer_id) {
   start_mu_.unlock();
 }
 
+void Van::SendDelMsg() {
+  CHECK(ready_.load());
+  ready_ = false;
+  Message gexit;
+  gexit.meta.control.cmd = Control::DEL_NODE;
+  gexit.meta.control.node.push_back(my_node_);
+  gexit.meta.recver = kScheduler;
+  gexit.meta.customer_id = 0;
+  int ret = SendMsg(gexit);
+  CHECK_NE(ret, -1);
+  while (!ready_.load()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+}
+
 void Van::Stop() {
+
+  SendDelMsg();
+
   // stop threads
   Message exit;
   exit.meta.control.cmd = Control::TERMINATE;
@@ -463,6 +549,8 @@ void Van::Receiving() {
         Meta recovery_nodes;  // store recovery nodes
         recovery_nodes.control.cmd = Control::ADD_NODE;
         ProcessAddNodeCommand(&msg, &nodes, &recovery_nodes);
+      } else if (ctrl.cmd == Control::DEL_NODE) {
+        ProcessDelNodeCommand(&msg, &nodes);
       } else if (ctrl.cmd == Control::BARRIER) {
         ProcessBarrierCommand(&msg);
       } else if (ctrl.cmd == Control::HEARTBEAT) {
