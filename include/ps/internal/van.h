@@ -169,6 +169,17 @@ class Van {
 
   std::atomic<bool> topoUpdated_{false};
 
+  Meta nodes_list_;
+
+  // scalling zone
+  bool worker_asyc_scale_ = false;
+  bool server_asyc_scale_ = false;
+
+  bool is_first_barrier_done_ = false;
+
+  std::vector<int> scalling_nodes_;
+  bool is_worker_scaling_ = false;
+
   /**
    * \brief processing logic of AddNode message for scheduler
    */

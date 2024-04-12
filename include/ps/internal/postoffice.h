@@ -26,6 +26,8 @@ class Postoffice {
 
   int GenNextID(Node::Role role);
 
+  bool is_scale() const { return van_->my_node().is_scale; }
+
   /**
    * \brief return the singleton object
    */
@@ -80,6 +82,8 @@ class Postoffice {
     CHECK(it != node_ids_.cend()) << "node " << node_id << " doesn't exist";
     return it->second;
   }
+  const int get_init_num_servers() const { return init_num_servers_; }
+  const int get_init_num_workers() const { return init_num_workers_; }
   /**
    * \brief return the key ranges of all server nodes
    */
@@ -191,7 +195,13 @@ class Postoffice {
   std::mutex server_key_ranges_mu_;
   std::vector<Range> server_key_ranges_;
   bool is_worker_, is_server_, is_scheduler_;
-  int num_servers_, num_workers_;
+  int num_servers_ = 0;
+  int num_workers_ = 0;
+
+  // initial number of nodes
+  int init_num_servers_, init_num_workers_;
+
+
   std::mutex num_servers_mu_;  // modify the number of servers
   std::unordered_map<int, std::unordered_map<int, bool>> barrier_done_;
   int verbose_;

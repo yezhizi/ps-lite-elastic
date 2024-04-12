@@ -72,7 +72,9 @@ struct Node {
     std::stringstream ss;
     ss << "role=" << (role == SERVER ? "server" : (role == WORKER ? "worker" : "scheduler"))
        << (id != kEmpty ? ", id=" + std::to_string(id) : "")
-       << ", ip=" << hostname << ", port=" << port << ", is_recovery=" << is_recovery;
+       << ", ip=" << hostname << ", port=" << port << ", is_recovery=" << is_recovery
+       << ", is_scale=" << is_scale;
+
 
     return ss.str();
   }
@@ -94,6 +96,8 @@ struct Node {
   int port;
   /** \brief whether this node is created by failover */
   bool is_recovery;
+  /** \brief whether this node is a scale node */
+  bool is_scale ;
 };
 /**
  * \brief meta info of a system control message
@@ -194,7 +198,7 @@ struct Meta {
   /** \brief system control message */
   Control control;
   /** \brief the byte size */
-  int data_size = 0;
+  int data_size = 0;  
   /** \brief message priority */
   int priority = 0;
 };

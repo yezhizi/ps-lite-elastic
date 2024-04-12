@@ -120,6 +120,7 @@ class ZMQVan : public Van {
       zmq_close(it->second);
     }
     // worker doesn't need to connect to the other workers. same for server
+    //TODO: worker may need to connect to other workers in the future
     if ((node.role == my_node_.role) && (node.id != my_node_.id)) {
       return;
     }

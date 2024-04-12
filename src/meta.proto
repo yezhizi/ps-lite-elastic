@@ -18,6 +18,8 @@ message PBNode {
   optional bool is_recovery = 5;
   // the locally unique id of an customer
   optional int32 customer_id = 10;
+  // whether or not a scalling node
+  optional bool is_scale = 6;
 }
 
 // system control info

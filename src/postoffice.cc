@@ -10,20 +10,25 @@
 
 namespace ps {
 Postoffice::Postoffice() { env_ref_ = Environment::_GetSharedRef(); }
-// TODO : numbers will be not needed or will be changed
+
 void Postoffice::InitEnvironment() {
   const char* val = NULL;
   std::string van_type = GetEnv("DMLC_PS_VAN_TYPE", "zmq");
   van_ = Van::Create(van_type);
-  // val = CHECK_NOTNULL(Environment::Get()->find("DMLC_NUM_WORKER"));
-  // num_workers_ = atoi(val);
-  // val =  CHECK_NOTNULL(Environment::Get()->find("DMLC_NUM_SERVER"));
-  // num_servers_ = atoi(val);
   val = CHECK_NOTNULL(Environment::Get()->find("DMLC_ROLE"));
   std::string role(val);
   is_worker_ = role == "worker";
   is_server_ = role == "server";
   is_scheduler_ = role == "scheduler";
+
+  if (is_scheduler_) {
+    // starting number of workers and servers
+    val = CHECK_NOTNULL(Environment::Get()->find("DMLC_NUM_WORKER"));
+    init_num_workers_ = atoi(val);
+    val = CHECK_NOTNULL(Environment::Get()->find("DMLC_NUM_SERVER"));
+    init_num_servers_ = atoi(val);
+  }
+
   verbose_ = GetEnv("PS_VERBOSE", 0);
 }
 
@@ -203,17 +208,21 @@ void Postoffice::AddNodes(const std::vector<int>& node_ids,
   const int node_group = role == Node::SERVER ? kServerGroup : kWorkerGroup;
   const int other_group = role == Node::SERVER ? kWorkerGroup : kServerGroup;
   for (int id : node_ids) {
+    bool is_new = false;
     for (int g :
          {id, node_group, node_group + kScheduler, node_group + other_group,
           node_group + kScheduler + other_group}) {
       if (std::find(node_ids_[g].begin(), node_ids_[g].end(), id) ==
           node_ids_[g].end()) {
         node_ids_[g].push_back(id);
-        if (role == Node::SERVER) {
-          ++num_servers_;
-        } else {
-          ++num_workers_;
-        }
+        is_new = true;
+      }
+    }
+    if (is_new) {
+      if (role == Node::SERVER) {
+        ++num_servers_;
+      } else {
+        ++num_workers_;
       }
     }
   }
@@ -225,17 +234,21 @@ void Postoffice::RemoveNodes(const std::vector<int> node_ids,
   const int node_group = role == Node::SERVER ? kServerGroup : kWorkerGroup;
   const int other_group = role == Node::SERVER ? kWorkerGroup : kServerGroup;
   for (int id : node_ids) {
+    bool is_removed = false;
     for (int g :
          {id, node_group, node_group + kScheduler, node_group + other_group,
           node_group + kScheduler + other_group}) {
       auto it = std::find(node_ids_[g].begin(), node_ids_[g].end(), id);
       if (it != node_ids_[g].end()) {
         node_ids_[g].erase(it);
-        if (role == Node::SERVER) {
-          --num_servers_;
-        } else {
-          --num_workers_;
-        }
+        is_removed = true;
+      }
+    }
+    if (is_removed) {
+      if (role == Node::SERVER) {
+        --num_servers_;
+      } else {
+        --num_workers_;
       }
     }
   }
