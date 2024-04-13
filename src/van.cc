@@ -221,7 +221,7 @@ void Van::UpdateLocalID(Message* msg, std::unordered_set<int>* deadnodes_set,
     CHECK(is_scheduler_);  // only scheduler can assign id
     CHECK_EQ(ctrl.node.size(), 1);
     // Add the scheduler node to the nodes list
-    if (nodes->control.node.empty()) nodes->control.node.push_back(my_node_);
+    // if (nodes->control.node.empty()) nodes->control.node.push_back(my_node_);
 
     // Add new coming node to var *nodes*, or replace the dead node
     bool isNewNode = true;
@@ -468,12 +468,12 @@ void Van::Start(int customer_id) {
         atoi(CHECK_NOTNULL(Environment::Get()->find("DMLC_PS_ROOT_PORT")));
     scheduler_.role = Node::SCHEDULER;
     scheduler_.id = kScheduler;
+    scheduler_.is_scale = false;
     is_scheduler_ = Postoffice::Get()->is_scheduler();
 
     // get my node info
     if (is_scheduler_) {
       my_node_ = scheduler_;
-      Postoffice::Get()->AddNodes({my_node_.id}, my_node_.role);
     } else {
       auto role = Postoffice::Get()->is_worker() ? Node::WORKER : Node::SERVER;
       const char* nhost = Environment::Get()->find("DMLC_NODE_HOST");
@@ -503,6 +503,7 @@ void Van::Start(int customer_id) {
       my_node_.id = Node::kEmpty;
       my_node_.customer_id = customer_id;
     }
+    ps::Postoffice::Get()->AddNodes({scheduler_.id}, Node::SCHEDULER);
 
     // bind.
     my_node_.port = Bind(my_node_, is_scheduler_ ? 0 : 40);
