@@ -318,6 +318,7 @@ void Van::ProcessBarrierCommand(Message* msg) {
       }
     }
     if (!is_first_barrier_done_) {
+      PS_VLOG(1) << "The first barrier is done, training started!";
       is_first_barrier_done_ = true;
     }
   }
@@ -402,6 +403,11 @@ void Van::ProcessAddNodeCommand(Message* msg, Meta* nodes,
     for (const auto& node : ctrl.node) {
       std::string addr_str = node.hostname + ":" + std::to_string(node.port);
       if (connected_nodes_.find(addr_str) == connected_nodes_.end()) {
+        if(node.role == Node::SCHEDULER){
+          connected_nodes_[addr_str] = node.id;
+          Postoffice::Get()->AddNodes({node.id}, Node::SCHEDULER);
+          continue;
+        }
         // Connect() don't connect the node if the role  is same
         Connect(node);
         if (!node.is_recovery && node.role == Node::SERVER) {
@@ -467,6 +473,7 @@ void Van::Start(int customer_id) {
     // get my node info
     if (is_scheduler_) {
       my_node_ = scheduler_;
+      Postoffice::Get()->AddNodes({my_node_.id}, my_node_.role);
     } else {
       auto role = Postoffice::Get()->is_worker() ? Node::WORKER : Node::SERVER;
       const char* nhost = Environment::Get()->find("DMLC_NODE_HOST");

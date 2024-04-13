@@ -111,7 +111,7 @@ struct Control {
   std::string DebugString() const {
     if (empty()) return "";
     std::vector<std::string> cmds = {
-      "EMPTY", "TERMINATE", "ADD_NODE","DEL_NODE", "DEL_NODE", "BARRIER", "ACK", "HEARTBEAT"};
+      "EMPTY", "TERMINATE", "ADD_NODE","DEL_NODE", "BARRIER", "ACK", "HEARTBEAT"};
     std::stringstream ss;
     ss << "cmd=" << cmds[cmd];
     if (node.size()) {

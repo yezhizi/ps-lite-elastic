@@ -205,6 +205,22 @@ void Postoffice::clear_nodes() {
 void Postoffice::AddNodes(const std::vector<int>& node_ids,
                           const Node::Role role) {
   std::lock_guard<std::mutex> lk(node_ids_mu_);
+  if(role == Node::SCHEDULER){
+    CHECK_EQ(node_ids.size(), 1);
+    int node_group = kScheduler;
+    CHECK_EQ(node_ids[0], kScheduler);
+    for (int g:{kScheduler, kScheduler + kServerGroup + kWorkerGroup,
+                kScheduler + kWorkerGroup, kScheduler + kServerGroup}) {
+      if (std::find(node_ids_[g].begin(), node_ids_[g].end(), kScheduler) ==
+          node_ids_[g].end()) {
+        node_ids_[g].push_back(kScheduler);
+      }else{
+        LOG(WARNING) << "Scheduler already exists";
+      }
+    }
+    return;
+  }
+
   const int node_group = role == Node::SERVER ? kServerGroup : kWorkerGroup;
   const int other_group = role == Node::SERVER ? kWorkerGroup : kServerGroup;
   for (int id : node_ids) {
