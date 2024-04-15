@@ -117,6 +117,9 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
         this->scalling_nodes_.push_back(node.id);
         this->is_worker_scaling_ = role == Node::WORKER;
         // TODO need send message to the controller
+        std::string node_info = node.role == Node::WORKER ? "w" : "s";
+        node_info += std::to_string(node.id);
+        SendtoController(kControllerSignal::kAddNodeSignal, node_info);
       } else {
         // sychronize add
         Postoffice::Get()->AddNodes({node.id}, role);
@@ -221,26 +224,26 @@ void Van::UpdateLocalID(Message* msg, std::unordered_set<int>* deadnodes_set,
     CHECK(is_scheduler_);  // only scheduler can assign id
     CHECK_EQ(ctrl.node.size(), 1);
     // Add the scheduler node to the nodes list
-    // if (nodes->control.node.empty()) nodes->control.node.push_back(my_node_);
+    if (nodes->control.node.empty()) nodes->control.node.push_back(my_node_);
 
     // Add new coming node to var *nodes*, or replace the dead node
     bool isNewNode = true;
-    for (size_t i = 0; i < nodes->control.node.size() - 1; ++i) {
-      const auto& node = nodes->control.node[i];
-      if (deadnodes_set->find(node.id) != deadnodes_set->end() &&
-          node.role == ctrl.node[0].role) {
-        auto& recovery_node = ctrl.node[0];
-        // assign previous node id
-        recovery_node.id = node.id;
-        recovery_node.is_recovery = true;
-        PS_VLOG(1) << "replace dead node " << node.DebugString() << " by node "
-                   << recovery_node.DebugString();
-        nodes->control.node[i] = recovery_node;
-        recovery_nodes->control.node.push_back(recovery_node);
-        isNewNode = false;
-        break;
-      }
+  
+    for (auto& node : nodes->control.node) {
+    if (deadnodes_set->find(node.id) != deadnodes_set->end() && node.role == ctrl.node[0].role) {
+      auto& recovery_node = ctrl.node[0];
+      // assign previous node id
+      recovery_node.id = node.id;
+      recovery_node.is_recovery = true;
+      PS_VLOG(1) << "replace dead node " << node.DebugString()
+            << " by node " << recovery_node.DebugString();
+      node = recovery_node;
+      recovery_nodes->control.node.push_back(recovery_node);
+      isNewNode = false;
+      break;
     }
+    }
+    
     if (isNewNode) nodes->control.node.push_back(ctrl.node[0]);
   }
 
@@ -300,9 +303,8 @@ void Van::ProcessBarrierCommand(Message* msg) {
                   Postoffice::Get()->get_init_num_servers() + 1;
   }
   ++barrier_count_[group];
-  PS_VLOG(1) << "Barrier count for " << group << " : "
-               << barrier_count_[group];
-  if (barrier_count_[group] == count_total){
+  PS_VLOG(1) << "Barrier count for " << group << " : " << barrier_count_[group];
+  if (barrier_count_[group] == count_total) {
     barrier_count_[group] = 0;
     Message res;
     res.meta.request = false;
@@ -403,11 +405,6 @@ void Van::ProcessAddNodeCommand(Message* msg, Meta* nodes,
     for (const auto& node : ctrl.node) {
       std::string addr_str = node.hostname + ":" + std::to_string(node.port);
       if (connected_nodes_.find(addr_str) == connected_nodes_.end()) {
-        if(node.role == Node::SCHEDULER){
-          connected_nodes_[addr_str] = node.id;
-          Postoffice::Get()->AddNodes({node.id}, Node::SCHEDULER);
-          continue;
-        }
         // Connect() don't connect the node if the role  is same
         Connect(node);
         if (!node.is_recovery && node.role == Node::SERVER) {
@@ -615,7 +612,8 @@ int Van::Send(const Message& msg) {
 
 void Van::Receiving() {
   Meta& nodes = this->nodes_list_;
-
+  Meta recovery_nodes;  // store recovery nodes
+  recovery_nodes.control.cmd = Control::ADD_NODE;
   while (true) {
     Message msg;
     int recv_bytes = RecvMsg(&msg);
@@ -642,8 +640,6 @@ void Van::Receiving() {
         ProcessTerminateCommand();
         break;
       } else if (ctrl.cmd == Control::ADD_NODE) {
-        Meta recovery_nodes;  // store recovery nodes
-        recovery_nodes.control.cmd = Control::ADD_NODE;
         ProcessAddNodeCommand(&msg, &nodes, &recovery_nodes);
       } else if (ctrl.cmd == Control::DEL_NODE) {
         ProcessDelNodeCommand(&msg, &nodes);
@@ -788,5 +784,21 @@ void Van::Heartbeat() {
     msg.meta.timestamp = timestamp_++;
     Send(msg);
   }
+}
+int Van::SendtoController(kControllerSignal signal, const std::string& body) {
+  CHECK_EQ(my_node_.role, Node::SCHEDULER);
+  Message msg;
+  msg.meta.app_id = 0;
+  msg.meta.head = static_cast<int>(signal);
+  if (!body.empty()) msg.meta.body = body;
+  msg.meta.timestamp = timestamp_++;
+  msg.meta.request = true;
+  msg.meta.customer_id = 0;
+  msg.meta.recver = kScheduler;
+  msg.meta.simple_app = true;
+  int ret = Send(msg);
+  CHECK_NE(ret, -1);
+  PS_VLOG(1) << "Send signal to controller " << static_cast<int>(signal);
+  return ret;
 }
 }  // namespace ps

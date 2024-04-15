@@ -88,6 +88,10 @@ class Van {
       return topoUpdated_;
   }
 
+  inline bool IsWorkerScaling() { return is_worker_scaling_; }
+
+  const std::vector<int>& GetScallingNodes() const { return scalling_nodes_; }
+
  protected:
   /**
    * \brief connect to a node
@@ -180,6 +184,7 @@ class Van {
   std::vector<int> scalling_nodes_;
   bool is_worker_scaling_ = false;
 
+  int SendtoController(kControllerSignal signal, const std::string &body);
   /**
    * \brief processing logic of AddNode message for scheduler
    */

@@ -270,13 +270,17 @@ void Postoffice::RemoveNodes(const std::vector<int> node_ids,
   }
 }
 
+
 int Postoffice::GenNextID(Node::Role role) {
   CHECK(role == Node::SERVER || role == Node::WORKER);
   int node_group = role == Node::SERVER ? kServerGroup : kWorkerGroup;
   int id_diff = role == Node::SERVER ? 8 : 9;
   std::lock_guard<std::mutex> lk(node_ids_mu_);
   // woker id = rank * 2 + 9; server id = rank * 2 + 8
-  std::vector<int>& ids = node_ids_[node_group];
+  std::vector<int> ids = node_ids_[node_group];
+  std::vector<int> scale_nodes = van_->GetScallingNodes();
+  ids.insert(ids.end(), scale_nodes.begin(), scale_nodes.end());
+
   std::sort(ids.begin(), ids.end());
   int id = 0;
   for (int i = 0; i < ids.size(); ++i) {
