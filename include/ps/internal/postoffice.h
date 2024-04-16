@@ -124,6 +124,7 @@ class Postoffice {
    * \brief convert from a node id into a server or worker rank
    * \param id the node id
    */
+  // TODO: delete this function
   static inline int IDtoRank(int id) {
 #ifdef _MSC_VER
 #undef max
@@ -145,6 +146,7 @@ class Postoffice {
    * Each worker will have a unique rank within [0, NumWorkers()). So are
    * servers. This function is available only after \ref Start has been called.
    */
+  // TODO: should get my rank by node_ids, since the rank may be changed
   int my_rank() const { return IDtoRank(van_->my_node().id); }
   /** \brief Returns true if this node is a worker node */
   int is_worker() const { return is_worker_; }
