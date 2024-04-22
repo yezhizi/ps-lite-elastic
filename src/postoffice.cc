@@ -22,7 +22,9 @@ void Postoffice::InitEnvironment() {
   is_scheduler_ = role == "scheduler";
 
   if (is_scheduler_) {
-    // starting number of workers and servers
+    // number of workers and servers
+    // when the number of worker and server reache the init_num_workers_ and init_num_servers_
+    // the training will start, after that the comming node will be added asynchronizely
     val = CHECK_NOTNULL(Environment::Get()->find("DMLC_NUM_WORKER"));
     init_num_workers_ = atoi(val);
     val = CHECK_NOTNULL(Environment::Get()->find("DMLC_NUM_SERVER"));

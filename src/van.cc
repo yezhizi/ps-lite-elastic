@@ -97,7 +97,7 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
       bool& is_asyc = scale_meta_.IsAsycScale(is_worker);
 
       if (is_asyc) {
-        // TODO: dont support the below situation: worker is added nomally, but
+        // TODO: dont support the situation: worker is added nomally, but
         // server is added asychronize
         CHECK(scale_meta_.IsTwoRoleAllAsycScale());
         {
@@ -114,7 +114,7 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
         // asychronize add
         // do not update the number in Postoffice layer right now
         node.is_scale = true;
-        // TODO need send message to the controller
+        // send message to the controller
         std::string node_info = node.role == Node::WORKER ? "w" : "s";
         node_info += std::to_string(node.id);
         SendSingnaltoController(kControllerSignal::kAddNodeSignal, node_info);
@@ -189,6 +189,7 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
 }
 
 void Van::ProcessDelNodeCommandAtScheduler(Message* msg, Meta* nodes) {
+  // need modify the logic
   auto& ctrl = msg->meta.control;
   CHECK_EQ(ctrl.node.size(), 1);
   auto& outcoming_node = ctrl.node[0];
@@ -227,7 +228,21 @@ void Van::UpdateLocalID(Message* msg, std::unordered_set<int>* deadnodes_set,
     // Add new coming node to var *nodes*, or replace the dead node
     bool isNewNode = true;
 
+
     for (auto& node : nodes->control.node) {
+      if (deadnodes_set->find(node.id) != deadnodes_set->end() &&
+          node.role == ctrl.node[0].role) {
+        auto& recovery_node = ctrl.node[0];
+        // assign previous node id
+        recovery_node.id = node.id;
+        recovery_node.is_recovery = true;
+        PS_VLOG(1) << "replace dead node " << node.DebugString() << " by node "
+                   << recovery_node.DebugString();
+        node = recovery_node;
+        recovery_nodes->control.node.push_back(recovery_node);
+        isNewNode = false;
+        break;
+      }
       if (deadnodes_set->find(node.id) != deadnodes_set->end() &&
           node.role == ctrl.node[0].role) {
         auto& recovery_node = ctrl.node[0];
@@ -295,6 +310,10 @@ void Van::ProcessBarrierCommand(Message* msg) {
   int group = ctrl.barrier_group;
   int count_total;
   if (is_first_barrier_done_) {
+    // the flag 'is_first_barrier_done_' is uesd to wait all initial nodes to add in .
+    // the initial nodes are added synchronously .
+    // when all initial nodes are added, the first barrier is done, and the training can start.
+    // the initial nodes number is defined in the scheduler env variable 
     count_total = static_cast<int>(Postoffice::Get()->GetNodeIDs(group).size());
   } else {
     // the first barrier is used to wait for all nodes to be connected
@@ -340,6 +359,7 @@ void Van::ProcessDataMsg(Message* msg) {
 }
 
 void Van::ProcessDelNodeCommand(Message* msg, Meta* nodes) {
+  // need modify the logic
   is_scale_processing_ = false;
   auto& ctrl = msg->meta.control;
   auto& outcoming_nodes = ctrl.node;
