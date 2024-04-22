@@ -15,6 +15,44 @@
 #include "ps/base.h"
 #include "ps/internal/message.h"
 namespace ps {
+class ScaleMeta{
+  public:
+  ScaleMeta() : worker_asyc_scale_(false), server_asyc_scale_(false), is_worker_(false) {}
+  ~ScaleMeta() = default;
+  std::vector<int>& GetNodes() { return nodes_; }
+  bool AddNode(int node, bool is_worker) {
+    if(!nodes_.empty() && is_worker_ != is_worker) {
+      return false;
+    }
+    nodes_.push_back(node);
+    is_worker_ = is_worker;
+    return true;
+  }
+  void Clear() {
+    nodes_.clear();
+    worker_asyc_scale_ = false;
+    server_asyc_scale_ = false;
+    is_worker_ = false;
+  }
+  bool IsWorkerScaling() { return is_worker_; }
+  bool& IsAsycScale(bool is_worker) {
+    if(is_worker) {
+      return worker_asyc_scale_;
+    } else {
+      return server_asyc_scale_;
+    }
+  }
+  bool IsTwoRoleAllAsycScale() {
+    return worker_asyc_scale_ && server_asyc_scale_;
+  }
+  private:
+    bool worker_asyc_scale_ ;
+    bool server_asyc_scale_ ;
+
+    std::vector<int> nodes_;
+    bool is_worker_;
+
+};
 class Resender;
 class PBMeta;
 /**
@@ -64,6 +102,12 @@ class Van {
     return my_node_;
   }
 
+  inline void update_scale_status() {
+    CHECK(ready_);
+    // the scheduler promise there is no command sent to the van when the scale is processing
+    my_node_.is_scale = false;
+  }
+
   void SendDelMsg();
   /**
    * \brief stop van
@@ -82,15 +126,11 @@ class Van {
   inline bool IsReady() { return ready_; }
 
   inline bool IsTopoUpdated() {
-    if (is_scheduler_)
-      return true;
-    else
-      return topoUpdated_;
+      return is_scale_processing_;
   }
 
-  inline bool IsWorkerScaling() { return is_worker_scaling_; }
+  ScaleMeta & GetScaleMeta() { return scale_meta_; }
 
-  const std::vector<int>& GetScallingNodes() const { return scalling_nodes_; }
 
  protected:
   /**
@@ -171,20 +211,18 @@ class Van {
   std::atomic<int> timestamp_{0};
   int init_stage = 0;
 
-  std::atomic<bool> topoUpdated_{false};
+  std::atomic<bool> is_scale_processing_{false};
 
   Meta nodes_list_;
 
   // scalling zone
-  bool worker_asyc_scale_ = false;
-  bool server_asyc_scale_ = false;
+
+  ScaleMeta scale_meta_;
 
   bool is_first_barrier_done_ = false;
 
-  std::vector<int> scalling_nodes_;
-  bool is_worker_scaling_ = false;
 
-  int SendtoController(kControllerSignal signal, const std::string &body);
+  int SendSingnaltoController(kControllerSignal signal, const std::string &body);
   /**
    * \brief processing logic of AddNode message for scheduler
    */
