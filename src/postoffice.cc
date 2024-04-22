@@ -207,7 +207,6 @@ void Postoffice::AddNodes(const std::vector<int>& node_ids,
   std::lock_guard<std::mutex> lk(node_ids_mu_);
   if(role == Node::SCHEDULER){
     CHECK_EQ(node_ids.size(), 1);
-    int node_group = kScheduler;
     CHECK_EQ(node_ids[0], kScheduler);
     for (int g:{kScheduler, kScheduler + kServerGroup + kWorkerGroup,
                 kScheduler + kWorkerGroup, kScheduler + kServerGroup}) {
@@ -278,7 +277,7 @@ int Postoffice::GenNextID(Node::Role role) {
   std::lock_guard<std::mutex> lk(node_ids_mu_);
   // woker id = rank * 2 + 9; server id = rank * 2 + 8
   std::vector<int> ids = node_ids_[node_group];
-  std::vector<int> scale_nodes = van_->GetScallingNodes();
+  std::vector<int> scale_nodes = van_->GetScaleMeta().GetNodes();
   ids.insert(ids.end(), scale_nodes.begin(), scale_nodes.end());
 
   std::sort(ids.begin(), ids.end());
