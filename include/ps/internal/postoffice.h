@@ -124,11 +124,19 @@ class Postoffice {
    * \brief convert from a node id into a server or worker rank
    * \param id the node id
    */
-  static inline int IDtoRank(int id) {
-#ifdef _MSC_VER
-#undef max
-#endif
-    return std::max((id - 8) / 2, 0);
+  int IDtoRank(int id, bool is_worker) {
+    // reffer to node_ids_ to get the rank
+    std::lock_guard<std::mutex> lk(node_ids_mu_);
+    int node_group = is_worker ? kWorkerGroup : kServerGroup;
+    // get the rank of id in the node_group
+    std::vector<int>& nodes = node_ids_[node_group];
+    std::sort(nodes.begin(), nodes.end());
+    auto it = std::find(nodes.begin(), nodes.end(), id);
+    if (it == nodes.end()) {
+      return -1;
+    } else {
+      return std::distance(nodes.begin(), it);
+    }
   }
   /** \brief Returns the number of worker nodes */
   int num_workers() const {
@@ -145,7 +153,35 @@ class Postoffice {
    * Each worker will have a unique rank within [0, NumWorkers()). So are
    * servers. This function is available only after \ref Start has been called.
    */
-  int my_rank() const { return IDtoRank(van_->my_node().id); }
+  int my_rank() {
+    return IDtoRank(van_->my_node().id, van_->my_node().role == Node::WORKER);
+  }
+
+  void UpdateScaleNodes(std::vector<int> node_ids, bool is_worker=false) {
+      if(node_ids.empty()){
+        CHECK(is_scale());
+        van_->update_scale_status();
+        return;
+      }
+
+    // check if the node is already in scale nodes
+    ScaleMeta& scale_meta = van_->GetScaleMeta();
+    CHECK(scale_meta.IsWorkerScaling() == is_worker);
+    CHECK(scale_meta.GetNodes().size() == node_ids.size());
+    for (int node_id : node_ids) {
+      auto it = std::find(scale_meta.GetNodes().begin(),
+                          scale_meta.GetNodes().end(), node_id);
+      CHECK(it != scale_meta.GetNodes().end())
+          << "Node " << node_id << " is not in scale nodes";
+    }
+    scale_meta.Clear();
+    AddNodes(node_ids, is_worker ? Node::WORKER : Node::SERVER);
+
+    // for scalling nodes, update
+    if (is_scale()) {
+      van_->update_scale_status();
+    }
+  }
   /** \brief Returns true if this node is a worker node */
   int is_worker() const { return is_worker_; }
   /** \brief Returns true if this node is a server node. */
@@ -200,7 +236,6 @@ class Postoffice {
 
   // initial number of nodes
   int init_num_servers_, init_num_workers_;
-
 
   std::mutex num_servers_mu_;  // modify the number of servers
   std::unordered_map<int, std::unordered_map<int, bool>> barrier_done_;
