@@ -158,12 +158,11 @@ class Postoffice {
   }
 
   void UpdateScaleNodes(std::vector<int> node_ids, bool is_worker=false) {
-      if(node_ids.empty()){
-        CHECK(is_scale());
-        van_->update_scale_status();
-        return;
-      }
-
+    if(node_ids.empty()){
+      CHECK(is_scale());
+      van_->update_scale_status();
+      return;
+    }
     // check if the node is already in scale nodes
     ScaleMeta& scale_meta = van_->GetScaleMeta();
     CHECK(scale_meta.IsWorkerScaling() == is_worker);

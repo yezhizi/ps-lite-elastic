@@ -63,6 +63,13 @@ class Customer {
    */
   int NewRequest(int recver);
 
+  /**
+   * \brief get a timestamp for a new request. threadsafe. Overloaded for worker
+   * parameters transfer \param recver the receive node id of this request
+   * \param num the number of responses expected
+   * \return the timestamp of this request
+   */
+  int NewRequest(const std::vector<int>& recver);
 
   /**
    * \brief wait until the request is finished. threadsafe
@@ -75,6 +82,13 @@ class Customer {
    * \param timestamp the timestamp of the request
    */
   int NumResponse(int timestamp);
+
+  /**
+   * \brief return true if the request is finished. threadsafe
+   * \param timestamp the timestamp of the request
+   * \param num judge if the number of responses plus num is reached expected
+   */
+  bool IsFinished(int timestamp, int num = 1);
 
   /**
    * \brief add a number of responses to timestamp

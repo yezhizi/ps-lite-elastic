@@ -571,7 +571,9 @@ class IBVerbsVan : public Van {
     CHECK(node.hostname.size());
 
     // worker doesn't need to connect to the other workers. same for server
-    if ((node.role == my_node_.role) && (node.id != my_node_.id)) {
+    // worker may need to connect to other workers in the future
+    if ((node.role == Node::SERVER) && (my_node_.role == Node::SERVER) &&
+        (node.id != my_node_.id)) {
       return;
     }
 

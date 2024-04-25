@@ -11,6 +11,8 @@
 #include "ps/simple_app.h"
 namespace ps {
 
+struct KVMeta;
+
 /**
  * \brief the structure for a list of key-value pairs
  *
@@ -64,6 +66,9 @@ class KVWorker : public SimpleApp {
    * servers' data structure or the kv pairs have already pulled back.
    */
   using Callback = std::function<void()>;
+  using ReqHandle = std::function<void(const KVMeta& req_meta,
+                                       const KVPairs<Val>& req_data,
+                                       KVWorker* worker)>;
 
   /**
    * \brief constructor
@@ -259,6 +264,57 @@ class KVWorker : public SimpleApp {
     return ts;
   }
 
+  /** \brief zero copy parameter migration api
+   *
+   * \param dst the destination worker id
+   * \param keys the keys to be migrated. The keys are not encoded by
+   * EncodeDefault, which is not as same as ZPull or ZPush this function is for
+   * worker to worker parameters migration
+   */
+  int ZMove(const std::vector<int>& dst, const SArray<Key>& keys,
+            const SArray<Val>& vals, const SArray<int>& lens = {}, int cmd = 0,
+            const Callback& cb = nullptr, int priority = 0) {
+    CHECK_GT(dst.size(), 0);
+    for(int id : dst){
+      CHECK(Postoffice::Get()->GetNodeIDs(id).size());
+    }
+    int ts = obj_->NewRequest(dst);
+    AddCallback(ts, cb);
+    KVPairs<Val> kvs;
+    kvs.keys = keys;
+    kvs.vals = vals;
+    kvs.lens = lens;
+    kvs.priority = priority;
+    // push = 1 pull = 0,
+    SendBtWorker(ts, dst, cmd, kvs);
+    return ts;
+  }
+
+  // Send kv pairs to the destination worker
+  void SendBtWorker(int timestamp, const std::vector<int>& dst, int cmd,
+                   const KVPairs<Val>& kvs) {
+    for (int id : dst) {
+      Message msg;
+      msg.meta.app_id = obj_->app_id();
+      msg.meta.customer_id = obj_->customer_id();
+      msg.meta.request = true;
+      msg.meta.push = true;
+      msg.meta.pull = false;
+      msg.meta.head = cmd;
+      msg.meta.timestamp = timestamp;
+      msg.meta.recver = id;
+      msg.meta.priority = kvs.priority;
+      if (kvs.keys.size()) {
+        msg.AddData(kvs.keys);
+        msg.AddData(kvs.vals);
+        if (kvs.lens.size()) {
+          msg.AddData(kvs.lens);
+        }
+      }
+      Postoffice::Get()->van()->Send(msg);
+    }
+  }
+
   /**
    * \brief zero-copy Pull
    *
@@ -325,6 +381,12 @@ class KVWorker : public SimpleApp {
     CHECK(slicer); slicer_ = slicer;
   }
 
+  /** \brief set worker request handle */
+  void set_request_handle(const ReqHandle& request_handle) {
+    CHECK(request_handle) << "invalid request handle";
+    request_handle_ = request_handle;
+  }
+  void Response(const KVMeta& req, const KVPairs<Val>& res = KVPairs<Val>());
  private:
   /**
    * \brief internal pull, C/D can be either SArray or std::vector
@@ -371,6 +433,8 @@ class KVWorker : public SimpleApp {
   std::mutex mu_;
   /** \brief kv list slicer */
   Slicer slicer_;
+  /** \brief worker need request_handle_ for parameters migrate */
+  ReqHandle request_handle_;
 };
 
 /** \brief meta information about a kv request */
@@ -517,6 +581,27 @@ void KVServer<Val>::Response(const KVMeta& req, const KVPairs<Val>& res) {
 }
 
 template <typename Val>
+void KVWorker<Val>::Response(const KVMeta& req, const KVPairs<Val>& res) {
+  Message msg;
+  msg.meta.app_id = obj_->app_id();
+  msg.meta.customer_id = req.customer_id;
+  msg.meta.request     = false;
+  msg.meta.push        = req.push;
+  msg.meta.pull        = req.pull;
+  msg.meta.head        = req.cmd;
+  msg.meta.timestamp   = req.timestamp;
+  msg.meta.recver      = req.sender;
+  if (res.keys.size()) {
+    msg.AddData(res.keys);
+    msg.AddData(res.vals);
+    if (res.lens.size()) {
+      msg.AddData(res.lens);
+    }
+  }
+  Postoffice::Get()->van()->Send(msg);
+}
+
+template <typename Val>
 void KVWorker<Val>::DefaultSlicer(
     const KVPairs<Val>& send, const std::vector<Range>& ranges,
     typename KVWorker<Val>::SlicedKVs* sliced) {
@@ -599,9 +684,8 @@ void KVWorker<Val>::Send(int timestamp, bool push, bool pull, int cmd, const KVP
     msg.meta.request     = true;
     msg.meta.push        = push;
     msg.meta.pull        = pull;
-    msg.meta.head        = cmd; //TODO : cmd may be useful
+    msg.meta.head        = cmd; 
     msg.meta.timestamp   = timestamp;
-    //TODO : i -> id 
     msg.meta.recver      = Postoffice::Get()->ServerRankToID(i);
     msg.meta.priority    = kvs.priority;
     const auto& kvs = s.second;
@@ -616,31 +700,48 @@ void KVWorker<Val>::Send(int timestamp, bool push, bool pull, int cmd, const KVP
   }
 }
 
-
 template <typename Val>
 void KVWorker<Val>::Process(const Message& msg) {
   if (msg.meta.simple_app) {
-    SimpleApp::Process(msg); return;
+    SimpleApp::Process(msg);
+    return;
   }
-  // store the data for pulling
+  
   int ts = msg.meta.timestamp;
-  if (msg.meta.pull) {
+  KVPairs<Val> kvs;
+  if (msg.data.size()) {
     CHECK_GE(msg.data.size(), (size_t)2);
-    KVPairs<Val> kvs;
     kvs.keys = msg.data[0];
     kvs.vals = msg.data[1];
     if (msg.data.size() > (size_t)2) {
       kvs.lens = msg.data[2];
     }
+  }
+  // store the data for pulling
+  if (msg.meta.pull) {
+    CHECK_GE(msg.data.size(), (size_t)2);
     mu_.lock();
     recv_kvs_[ts].push_back(kvs);
     mu_.unlock();
+  } else {
+    if (msg.meta.request) {
+      // worker will recv a push request for parameter migration
+      KVMeta meta;
+      meta.cmd = msg.meta.head;
+      meta.push = msg.meta.push;
+      meta.pull = msg.meta.pull;
+      meta.sender = msg.meta.sender;
+      meta.timestamp = msg.meta.timestamp;
+      meta.customer_id = msg.meta.customer_id;
+      this->request_handle_(meta, kvs, this);
+    } 
   }
 
   // finished, run callbacks
-  if (obj_->NumResponse(ts) == Postoffice::Get()->num_servers() - 1)  {
+  if (!msg.meta.request && obj_->IsFinished(ts,1)) {
     RunCallback(ts);
   }
+  
 }
 template <typename Val>
 void KVWorker<Val>::RunCallback(int timestamp) {

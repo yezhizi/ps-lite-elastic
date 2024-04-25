@@ -653,7 +653,10 @@ void Van::Receiving() {
       if (!msg.meta.simple_app) {
         PS_VLOG(3) << msg.DebugString();
       } else {
-        PS_VLOG(2) << msg.DebugString();
+        if (msg.meta.head == 13)
+          PS_VLOG(3) << msg.DebugString();
+        else
+          PS_VLOG(2) << msg.DebugString();
       }
     }
     // duplicated message

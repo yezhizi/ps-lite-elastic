@@ -29,6 +29,12 @@ int Customer::NewRequest(int recver) {
   return tracker_.size() - 1;
 }
 
+int Customer::NewRequest(const std::vector<int>& recvers) {
+  std::lock_guard<std::mutex> lk(tracker_mu_);
+  tracker_.push_back(std::make_pair(recvers.size(), 0));
+  return tracker_.size() - 1;
+}
+
 void Customer::WaitRequest(int timestamp) {
   std::unique_lock<std::mutex> lk(tracker_mu_);
   tracker_cond_.wait(lk, [this, timestamp]{
@@ -39,6 +45,11 @@ void Customer::WaitRequest(int timestamp) {
 int Customer::NumResponse(int timestamp) {
   std::lock_guard<std::mutex> lk(tracker_mu_);
   return tracker_[timestamp].second;
+}
+
+bool Customer::IsFinished(int timestamp, int num){
+  std::lock_guard<std::mutex> lk(tracker_mu_);
+  return tracker_[timestamp].first <= tracker_[timestamp].second + num;
 }
 
 void Customer::AddResponse(int timestamp, int num) {
