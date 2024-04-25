@@ -30,8 +30,6 @@ class ScaleMeta{
   }
   void Clear() {
     nodes_.clear();
-    worker_asyc_scale_ = false;
-    server_asyc_scale_ = false;
     is_worker_ = false;
   }
   bool IsWorkerScaling() { return is_worker_; }
