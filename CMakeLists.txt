@@ -82,4 +82,6 @@ file(GLOB_RECURSE SOURCE "src/*.cc")
 target_include_directories(pslite PUBLIC "${PROJECT_SOURCE_DIR}/include/")
 target_sources(pslite PRIVATE ${SOURCE})
 
-add_subdirectory(tests)
+if(PSLITE_BUILD_TEST)
+  add_subdirectory(tests)
+endif()
