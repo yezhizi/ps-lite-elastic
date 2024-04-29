@@ -1,0 +1,118 @@
+[1mdiff --git a/.clang-format b/.clang-format[m
+[1mdeleted file mode 100644[m
+[1mindex b9e49a4..0000000[m
+[1m--- a/.clang-format[m
+[1m+++ /dev/null[m
+[36m@@ -1,6 +0,0 @@[m
+[31m-# .clang-format file[m
+[31m-[m
+[31m-Language:        Cpp[m
+[31m-BasedOnStyle:    Google[m
+[31m-# 不排序头文件[m
+[31m-SortIncludes:    false[m
+[1mdiff --git a/.gitignore b/.gitignore[m
+[1mindex b77ee79..470d805 100644[m
+[1m--- a/.gitignore[m
+[1m+++ b/.gitignore[m
+[36m@@ -14,6 +14,3 @@[m [mtests/test_*[m
+ cmake-build-debug/[m
+ CMakeFiles/[m
+ recommonmark/[m
+[31m-[m
+[31m-!/.clang-format[m
+[31m-!/tests/test_*.cc[m
+\ No newline at end of file[m
+[1mdiff --git a/include/ps/base.h b/include/ps/base.h[m
+[1mindex 56f8bf7..a18b62c 100644[m
+[1m--- a/include/ps/base.h[m
+[1m+++ b/include/ps/base.h[m
+[36m@@ -29,11 +29,5 @@[m [mstatic const int kServerGroup = 2;[m
+ /** \brief the worker node group ID */[m
+ static const int kWorkerGroup = 4;[m
+ [m
+[31m-static const int SignalBound = 100;[m
+[31m-[m
+[31m-enum class kControllerSignal{[m
+[31m-    kAddNodeSignal = 101,[m
+[31m-};[m
+[31m-[m
+ }  // namespace ps[m
+ #endif  // PS_BASE_H_[m
+[1mdiff --git a/include/ps/internal/debug_logging.h b/include/ps/internal/debug_logging.h[m
+[1mdeleted file mode 100644[m
+[1mindex f8c5ae5..0000000[m
+[1m--- a/include/ps/internal/debug_logging.h[m
+[1m+++ /dev/null[m
+[36m@@ -1,51 +0,0 @@[m
+[31m-#ifndef PS_INTERNAL_DEBUG_LOGGING_H_[m
+[31m-#define PS_INTERNAL_DEBUG_LOGGING_H_[m
+[31m-[m
+[31m-#include "dmlc/logging.h"[m
+[31m-#include <unordered_map>[m
+[31m-#include <sstream>[m
+[31m-#include <string>[m
+[31m-[m
+[31m-namespace ps {[m
+[31m-class LogMapHelper {[m
+[31m- public:[m
+[31m-  // Constructor: accept a delimiter[m
+[31m-  LogMapHelper(const std::string& delimiter) : delimiter_(delimiter) {}[m
+[31m-[m
+[31m-  // Overload operator<< for std::unordered_map[m
+[31m-  LogMapHelper& operator<<(const std::unordered_map<std::string, int>& map) {[m
+[31m-    ss_ << " { ";[m
+[31m-    for (const auto& pair : map) {[m
+[31m-      ss_ << pair.first << delimiter_ << pair.second << ", ";[m
+[31m-    }[m
+[31m-    // Remove the trailing comma and space[m
+[31m-    std::string output = ss_.str();[m
+[31m-    if (!output.empty()) {[m
+[31m-      output = output.substr([m
+[31m-          0, output.length() - 2);  // if there is at least one pair[m
+[31m-    }[m
+[31m-    ss_.str("");[m
+[31m-    ss_ << output;[m
+[31m-    ss_ << " }";[m
+[31m-    return *this;[m
+[31m-  }[m
+[31m-[m
+[31m-  // Overload operator<< for std::string[m
+[31m-  LogMapHelper& operator<<(const std::string& str) {[m
+[31m-    ss_ << str;[m
+[31m-    return *this;[m
+[31m-  }[m
+[31m-[m
+[31m-  // Destructor: output the log message[m
+[31m-  ~LogMapHelper() { LOG(INFO) << ss_.str(); }[m
+[31m-[m
+[31m- private:[m
+[31m-  std::ostringstream ss_;[m
+[31m-  std::string delimiter_;[m
+[31m-};[m
+[31m-[m
+[31m-#define LOG_MAP(delimiter) LogMapHelper(delimiter)[m
+[31m-[m
+[31m-}  // namespace ps[m
+[31m-[m
+[31m-#endif  // PS_INTERNAL_DEBUG_LOGGING_H_[m
+[1mdiff --git a/include/ps/internal/message.h b/include/ps/internal/message.h[m
+[1mindex 38fb940..1150106 100644[m
+[1m--- a/include/ps/internal/message.h[m
+[1m+++ b/include/ps/internal/message.h[m
+[36m@@ -72,9 +72,7 @@[m [mstruct Node {[m
+     std::stringstream ss;[m
+     ss << "role=" << (role == SERVER ? "server" : (role == WORKER ? "worker" : "scheduler"))[m
+        << (id != kEmpty ? ", id=" + std::to_string(id) : "")[m
+[31m-       << ", ip=" << hostname << ", port=" << port << ", is_recovery=" << is_recovery[m
+[31m-       << ", is_scale=" << is_scale;[m
+[31m-[m
+[32m+[m[32m       << ", ip=" << hostname << ", port=" << port << ", is_recovery=" << is_recovery;[m
+ [m
+     return ss.str();[m
+   }[m
+[36m@@ -96,8 +94,6 @@[m [mstruct Node {[m
+   int port;[m
+   /** \brief whether this node is created by failover */[m
+   bool is_recovery;[m
+[31m-  /** \brief whether this node is a scale node */[m
+[31m-  
