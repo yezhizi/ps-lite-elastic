@@ -29,10 +29,13 @@ static const int kServerGroup = 2;
 /** \brief the worker node group ID */
 static const int kWorkerGroup = 4;
 
+/** \brief the trainer node group ID */
+static const int kTrainerGroup = 8;
+
 static const int SignalBound = 100;
 
-enum class kControllerSignal{
-    kAddNodeSignal = 101,
+enum class kControllerSignal {
+  kAddNodeSignal = 101,
 };
 
 }  // namespace ps

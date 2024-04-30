@@ -15,41 +15,44 @@
 #include "ps/base.h"
 #include "ps/internal/message.h"
 namespace ps {
-class ScaleMeta{
-  public:
-  ScaleMeta() : worker_asyc_scale_(false), server_asyc_scale_(false), is_worker_(false) {}
+class ScaleMeta {
+ public:
+  ScaleMeta()
+      : trainer_asyc_scale_(false),
+        server_asyc_scale_(false),
+        is_trainer_(false) {}
   ~ScaleMeta() = default;
-  std::vector<int>& GetNodes() { return nodes_; }
-  bool AddNode(int node, bool is_worker) {
-    if(!nodes_.empty() && is_worker_ != is_worker) {
+  std::vector<int> &GetNodes() { return nodes_; }
+  bool AddNode(int node, bool is_trainer) {
+    if (!nodes_.empty() && is_trainer_ != is_trainer) {
       return false;
     }
     nodes_.push_back(node);
-    is_worker_ = is_worker;
+    is_trainer_ = is_trainer;
     return true;
   }
   void Clear() {
     nodes_.clear();
-    is_worker_ = false;
+    is_trainer_ = false;
   }
-  bool IsWorkerScaling() { return is_worker_; }
-  bool& IsAsycScale(bool is_worker) {
-    if(is_worker) {
-      return worker_asyc_scale_;
+  bool IstrainerScaling() { return is_trainer_; }
+  bool &IsAsycScale(bool is_trainer) {
+    if (is_trainer) {
+      return trainer_asyc_scale_;
     } else {
       return server_asyc_scale_;
     }
   }
   bool IsTwoRoleAllAsycScale() {
-    return worker_asyc_scale_ && server_asyc_scale_;
+    return trainer_asyc_scale_ && server_asyc_scale_;
   }
-  private:
-    bool worker_asyc_scale_ ;
-    bool server_asyc_scale_ ;
 
-    std::vector<int> nodes_;
-    bool is_worker_;
+ private:
+  bool trainer_asyc_scale_;
+  bool server_asyc_scale_;
 
+  std::vector<int> nodes_;
+  bool is_trainer_;
 };
 class Resender;
 class PBMeta;
@@ -102,7 +105,8 @@ class Van {
 
   inline void update_scale_status() {
     CHECK(ready_);
-    // the scheduler promise there is no command sent to the van when the scale is processing
+    // the scheduler promise there is no command sent to the van when the scale
+    // is processing
     my_node_.is_scale = false;
   }
 
@@ -123,12 +127,9 @@ class Van {
    */
   inline bool IsReady() { return ready_; }
 
-  inline bool IsTopoUpdated() {
-      return is_scale_processing_;
-  }
+  inline bool IsTopoUpdated() { return is_scale_processing_; }
 
-  ScaleMeta & GetScaleMeta() { return scale_meta_; }
-
+  ScaleMeta &GetScaleMeta() { return scale_meta_; }
 
  protected:
   /**
@@ -198,6 +199,7 @@ class Van {
   size_t recv_bytes_ = 0;
   int num_servers_ = 0;
   int num_workers_ = 0;
+  int num_trainers_ = 0;
   /** the thread for receiving messages */
   std::unique_ptr<std::thread> receiver_thread_;
   /** the thread for sending heartbeat */
@@ -219,15 +221,15 @@ class Van {
 
   bool is_first_barrier_done_ = false;
 
-
-  int SendSingnaltoController(kControllerSignal signal, const std::string &body);
+  int SendSingnaltoController(kControllerSignal signal,
+                              const std::string &body);
   /**
    * \brief processing logic of AddNode message for scheduler
    */
   void ProcessAddNodeCommandAtScheduler(Message *msg, Meta *nodes,
                                         Meta *recovery_nodes);
   void ProcessDelNodeCommandAtScheduler(Message *msg, Meta *nodes);
-  
+
   /**
    * \brief processing logic of Terminate message
    */

@@ -12,14 +12,18 @@
 /** \brief communcating with a list of key-value paris. */
 #include "ps/kv_app.h"
 namespace ps {
-/** \brief Returns the number of worker nodes */
-inline int NumWorkers() { return Postoffice::Get()->num_workers(); }
-/** \brief Returns the number of server nodes */
-inline int NumServers() { return Postoffice::Get()->num_servers(); }
+// /** \brief Returns the number of worker nodes */
+// inline int NumWorkers() { return Postoffice::Get()->num_workers(); }
+// /** \brief Returns the number of server nodes */
+// inline int NumServers() { return Postoffice::Get()->num_servers(); }
+/** \brief Returns the number of trainer nodes */
+inline int NumTrainers() { return Postoffice::Get()->num_trainers(); }
 /** \brief Returns true if this node is a worker node */
 inline bool IsWorker() { return Postoffice::Get()->is_worker(); }
 /** \brief Returns true if this node is a server node. */
 inline bool IsServer() { return Postoffice::Get()->is_server(); }
+/** \brief Returns true if this node is a trainer node. */
+inline bool IsTrainer() { return Postoffice::Get()->is_trainer(); }
 /** \brief Returns true if this node is a scheduler node. */
 inline bool IsScheduler() { return Postoffice::Get()->is_scheduler(); }
 /** \brief Returns the rank of this node in its group
@@ -49,8 +53,9 @@ inline void StartAsync(int customer_id, const char* argv0 = nullptr) {
 /**
  * \brief terminate the system
  *
- * All nodes should call this function before existing. 
- * \param do_barrier whether to block until every node is finalized, default true.
+ * All nodes should call this function before existing.
+ * \param do_barrier whether to block until every node is finalized, default
+ * true.
  */
 inline void Finalize(int customer_id, const bool do_barrier = true) {
   Postoffice::Get()->Finalize(customer_id, do_barrier);

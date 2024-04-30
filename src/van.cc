@@ -82,29 +82,32 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
         LOG(WARNING) << "node " << node.DebugString()
                      << " already connected before";
         // TODO: need delete below code
-        int id = node.role == Node::SERVER
-                     ? Postoffice::ServerRankToID(num_servers_)
-                     : Postoffice::WorkerRankToID(num_workers_);
+        // int id = node.role == Node::SERVER
+        //              ? Postoffice::ServerRankToID(num_servers_)
+        //              : Postoffice::WorkerRankToID(num_workers_);
+        int id = Postoffice::TrainerRankToID(num_trainers_);
         shared_node_mapping_[id] = connected_nodes_[node_host_ip];
         node.id = connected_nodes_[node_host_ip];
       }
       // just update the number  in VAN layer!!
-      if (role == Node::SERVER) num_servers_++;
-      if (role == Node::WORKER) num_workers_++;
-
+      // if (role == Node::SERVER) num_servers_++;
+      // if (role == Node::WORKER) num_workers_++;
+      if (role == Node::TRAINER) num_trainers_++;
       // check if the node need to be asychronize added
-      bool is_worker = role == Node::WORKER;
-      bool& is_asyc = scale_meta_.IsAsycScale(is_worker);
+      // bool is_worker = role == Node::WORKER;
+      bool is_trainer = role == Node::TRAINER;
+      // bool& is_asyc = scale_meta_.IsAsycScale(is_worker);
+      bool& is_asyc = scale_meta_.IsAsycScale(is_trainer);
 
       if (is_asyc) {
         // TODO: dont support the situation: worker is added nomally, but
         // server is added asychronize
-        CHECK(scale_meta_.IsTwoRoleAllAsycScale());
-        {
-          // Send a empty message to the node
-        }
-
-        bool ret = scale_meta_.AddNode(node.id, is_worker);
+        // CHECK(scale_meta_.IsTwoRoleAllAsycScale());
+        // {
+        //   // Send a empty message to the node
+        // }
+        Postoffice::Get()->AddNodes({node.id}, role);  // add by fwj
+        bool ret = scale_meta_.AddNode(node.id, is_trainer);
         if (ret == false) {
           // when one role is scalling , the other is not allowed to be sycn
           // added
@@ -115,18 +118,19 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
         // do not update the number in Postoffice layer right now
         node.is_scale = true;
         // send message to the controller
-        std::string node_info = node.role == Node::WORKER ? "w" : "s";
+        std::string node_info = node.role == Node::TRAINER ? "t" : "s";
         node_info += std::to_string(node.id);
-        SendSingnaltoController(kControllerSignal::kAddNodeSignal, node_info);
+        // SendSingnaltoController(kControllerSignal::kAddNodeSignal,
+        // node_info);
       } else {
         // sychronize add
         Postoffice::Get()->AddNodes({node.id}, role);
         node.is_scale = false;
-        auto init_num_nodes = role == Node::WORKER
-                                  ? Postoffice::Get()->get_init_num_workers()
+        auto init_num_nodes = role == Node::TRAINER
+                                  ? Postoffice::Get()->get_init_num_trainers()
                                   : Postoffice::Get()->get_init_num_servers();
-        auto now_num_nodes = role == Node::WORKER
-                                 ? Postoffice::Get()->num_workers()
+        auto now_num_nodes = role == Node::TRAINER
+                                 ? Postoffice::Get()->num_trainers()
                                  : Postoffice::Get()->num_servers();
         if (init_num_nodes == now_num_nodes) {
           is_asyc = true;
@@ -142,7 +146,10 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
       back.meta.control.node.push_back(node);
     }
     int coming_node_id = comingNodes[0].get().id;
-    for (int r : Postoffice::Get()->GetNodeIDs(kWorkerGroup + kServerGroup)) {
+    PS_VLOG(1) << "coming_node_id is " << coming_node_id;
+
+    for (int r : Postoffice::Get()->GetNodeIDs(kTrainerGroup)) {
+      PS_VLOG(1) << "recver_id is " << r;
       int recver_id = r;
       if (r == coming_node_id) continue;
       if (shared_node_mapping_.find(r) == shared_node_mapping_.end()) {
@@ -157,11 +164,12 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
     back.meta.recver = coming_node_id;
     back.meta.timestamp = timestamp_++;
     Send(back);
-    PS_VLOG(1) << "the scheduler is connected to " << num_workers_
-               << " workers and " << num_servers_ << " servers";
+    PS_VLOG(1) << "the scheduler is connected to " << num_trainers_
+               << " trainers and " << num_servers_ << " servers";
     PS_VLOG(1) << "There are " << scale_meta_.GetNodes().size()
                << " nodes in scalling zone "
-               << " scalling role is worker: " << scale_meta_.IsWorkerScaling();
+               << " scalling role is trainer: "
+               << scale_meta_.IstrainerScaling();
     ready_ = true;
   } else {
     auto dead_nodes = Postoffice::Get()->GetDeadNodes(heartbeat_timeout_);
@@ -171,7 +179,7 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
     Connect(recovery_nodes->control.node[0]);
     Postoffice::Get()->UpdateHeartbeat(recovery_nodes->control.node[0].id, t);
     Message back;
-    for (int r : Postoffice::Get()->GetNodeIDs(kWorkerGroup + kServerGroup)) {
+    for (int r : Postoffice::Get()->GetNodeIDs(kTrainerGroup)) {
       if (r != recovery_nodes->control.node[0].id &&
           dead_set.find(r) != dead_set.end()) {
         // do not try to send anything to dead node
@@ -206,7 +214,7 @@ void Van::ProcessDelNodeCommandAtScheduler(Message* msg, Meta* nodes) {
   // send del node to all nodes
   Message back;
   back.meta = msg->meta;
-  for (int r : Postoffice::Get()->GetNodeIDs(kWorkerGroup + kServerGroup)) {
+  for (int r : Postoffice::Get()->GetNodeIDs(kTrainerGroup)) {
     back.meta.recver = r;
     back.meta.timestamp = timestamp_++;
     Send(back);
@@ -228,21 +236,7 @@ void Van::UpdateLocalID(Message* msg, std::unordered_set<int>* deadnodes_set,
     // Add new coming node to var *nodes*, or replace the dead node
     bool isNewNode = true;
 
-
     for (auto& node : nodes->control.node) {
-      if (deadnodes_set->find(node.id) != deadnodes_set->end() &&
-          node.role == ctrl.node[0].role) {
-        auto& recovery_node = ctrl.node[0];
-        // assign previous node id
-        recovery_node.id = node.id;
-        recovery_node.is_recovery = true;
-        PS_VLOG(1) << "replace dead node " << node.DebugString() << " by node "
-                   << recovery_node.DebugString();
-        node = recovery_node;
-        recovery_nodes->control.node.push_back(recovery_node);
-        isNewNode = false;
-        break;
-      }
       if (deadnodes_set->find(node.id) != deadnodes_set->end() &&
           node.role == ctrl.node[0].role) {
         auto& recovery_node = ctrl.node[0];
@@ -271,7 +265,8 @@ void Van::UpdateLocalID(Message* msg, std::unordered_set<int>* deadnodes_set,
       // TODO: may no need to setenv DMLC_RANK
       // setenv may is not thread safe
       // keep the IDtoRank and RanktoID mapping
-      std::string rank = std::to_string(Postoffice::Get()->IDtoRank(node.id,my_node_.role==Node::WORKER));
+      std::string rank = std::to_string(
+          Postoffice::Get()->IDtoRank(node.id, my_node_.role == Node::TRAINER));
 #ifdef _MSC_VER
       _putenv_s("DMLC_RANK", rank.c_str());
 #else
@@ -310,15 +305,16 @@ void Van::ProcessBarrierCommand(Message* msg) {
   int group = ctrl.barrier_group;
   int count_total;
   if (is_first_barrier_done_) {
-    // the flag 'is_first_barrier_done_' is uesd to wait all initial nodes to add in .
-    // the initial nodes are added synchronously .
-    // when all initial nodes are added, the first barrier is done, and the training can start.
-    // the initial nodes number is defined in the scheduler env variable 
+    // the flag 'is_first_barrier_done_' is uesd to wait all initial nodes to
+    // add in . the initial nodes are added synchronously . when all initial
+    // nodes are added, the first barrier is done, and the training can start.
+    // the initial nodes number is defined in the scheduler env variable
     count_total = static_cast<int>(Postoffice::Get()->GetNodeIDs(group).size());
   } else {
     // the first barrier is used to wait for all nodes to be connected
-    count_total = Postoffice::Get()->get_init_num_workers() +
-                  Postoffice::Get()->get_init_num_servers() + 1;
+    // count_total = Postoffice::Get()->get_init_num_workers() +
+    //               Postoffice::Get()->get_init_num_servers() + 1;
+    count_total = Postoffice::Get()->get_init_num_trainers() + 1;
   }
   ++barrier_count_[group];
   PS_VLOG(1) << "Barrier count for " << group << " : " << barrier_count_[group];
@@ -351,7 +347,7 @@ void Van::ProcessDataMsg(Message* msg) {
   CHECK_NE(msg->meta.app_id, Meta::kEmpty);
   int app_id = msg->meta.app_id;
   int customer_id =
-      Postoffice::Get()->is_worker() ? msg->meta.customer_id : app_id;
+      Postoffice::Get()->is_trainer() ? msg->meta.customer_id : app_id;
   auto* obj = Postoffice::Get()->GetCustomer(app_id, customer_id, 5);
   CHECK(obj) << "timeout (5 sec) to wait App " << app_id << " customer "
              << customer_id << " ready at " << my_node_.role;
@@ -378,28 +374,35 @@ void Van::ProcessDelNodeCommand(Message* msg, Meta* nodes) {
     }
   }
   // update the topo, del the node
-  std::vector<int> server_ids;
-  std::vector<int> worker_ids;
+  // std::vector<int> server_ids;
+  // std::vector<int> worker_ids;
+  std::vector<int> trainer_ids;
   for (auto& node : outcoming_nodes) {
     auto addr_str = node.hostname + ":" + std::to_string(node.port);
     connected_nodes_.erase(addr_str);
     Disconnect(node);
     LOG(INFO) << "Disconnected from " << node.DebugString();
-    if (node.role == Node::SERVER) {
-      server_ids.push_back(node.id);
-      --num_servers_;
-    } else {
-      worker_ids.push_back(node.id);
-      --num_workers_;
+    // if (node.role == Node::SERVER) {
+    //   server_ids.push_back(node.id);
+    //   --num_servers_;
+    // }
+    // if (node.role == Node::WORKER) {
+    //   worker_ids.push_back(node.id);
+    //   --num_workers_;
+    // }
+    if (node.role == Node::TRAINER) {
+      trainer_ids.push_back(node.id);
+      --num_trainers_;
     }
   }
-  Postoffice::Get()->RemoveNodes(server_ids, Node::SERVER);
-  Postoffice::Get()->RemoveNodes(worker_ids, Node::WORKER);
+  // Postoffice::Get()->RemoveNodes(server_ids, Node::SERVER);
+  // Postoffice::Get()->RemoveNodes(worker_ids, Node::WORKER);
+  Postoffice::Get()->RemoveNodes(trainer_ids, Node::TRAINER);
 
   LOG_MAP(" id=") << "connected nodes" << connected_nodes_;
   if (is_scheduler_) {
-    LOG(INFO) << "the scheduler is connected to " << num_workers_
-              << " workers and " << num_servers_ << " servers";
+    LOG(INFO) << "the scheduler is connected to " << num_trainers_
+              << " trainers and " << num_servers_ << " servers";
   }
 }
 
@@ -417,12 +420,13 @@ void Van::ProcessAddNodeCommand(Message* msg, Meta* nodes,
     // TODO: need refactor here
     std::vector<int> server_ids;
     std::vector<int> worker_ids;
+    std::vector<int> trainer_ids;
 
     // Incremental Update
     for (const auto& node : ctrl.node) {
       std::string addr_str = node.hostname + ":" + std::to_string(node.port);
       if (connected_nodes_.find(addr_str) == connected_nodes_.end()) {
-        // Connect() don't connect the node if the role  is same
+        // Connect() trainer full mesh
         Connect(node);
         if (!node.is_recovery && node.role == Node::SERVER) {
           ++num_servers_;
@@ -431,6 +435,10 @@ void Van::ProcessAddNodeCommand(Message* msg, Meta* nodes,
         if (!node.is_recovery && node.role == Node::WORKER) {
           ++num_workers_;
           worker_ids.push_back(node.id);
+        };
+        if (!node.is_recovery && node.role == Node::TRAINER) {
+          ++num_trainers_;
+          trainer_ids.push_back(node.id);
         };
       }
       connected_nodes_[addr_str] = node.id;
@@ -441,15 +449,24 @@ void Van::ProcessAddNodeCommand(Message* msg, Meta* nodes,
       // directly add the node
       Postoffice::Get()->AddNodes(server_ids, Node::SERVER);
       Postoffice::Get()->AddNodes(worker_ids, Node::WORKER);
+      Postoffice::Get()->AddNodes(trainer_ids, Node::TRAINER);
     } else {
       // for the comming node, it will receive all the nodes(not contain scale
       // node)
       auto has_scale_node = ctrl.node[0].is_scale;
-      if (has_scale_node) {
+      PS_VLOG(1)
+          << "ctrl.node[0].id is "
+          << ctrl.node[0]
+                 .id;  // 每次添加new
+                       // trainer时候，对于trainer0（my_node_.is_scale =
+                       // false），scheduler都向trainer0只发送新节点信息，所以ctrl.node[0]就是new
+                       // trainer。
+      if (has_scale_node) {  // fwj:这一块的意义在哪儿？
         // if received node is scale node, then there is only one node
         // add it to scale zone
         CHECK_EQ(ctrl.node.size(), 1);
-        bool ret = scale_meta_.AddNode(ctrl.node[0].id, ctrl.node[0].role == Node::WORKER);
+        bool ret = scale_meta_.AddNode(ctrl.node[0].id,
+                                       ctrl.node[0].role == Node::TRAINER);
         CHECK(ret);
         PS_VLOG(1) << "Add node " << ctrl.node[0].DebugString()
                    << " to scale zone";
@@ -457,13 +474,14 @@ void Van::ProcessAddNodeCommand(Message* msg, Meta* nodes,
         // directly add the node
         Postoffice::Get()->AddNodes(server_ids, Node::SERVER);
         Postoffice::Get()->AddNodes(worker_ids, Node::WORKER);
+        Postoffice::Get()->AddNodes(trainer_ids, Node::TRAINER);
       }
     }
-    PS_VLOG(1) << "The node is connected to " << num_workers_ << " workers and "
-               << num_servers_ << " servers"
+    PS_VLOG(1) << "The node is connected to " << num_trainers_
+               << " trainers and " << num_servers_ << " servers"
                << " in Van layer";
     PS_VLOG(1) << "The node is connected to "
-               << Postoffice::Get()->num_workers() << " workers and "
+               << Postoffice::Get()->num_trainers() << " trainers and "
                << Postoffice::Get()->num_servers() << " servers"
                << " in Postoffice layer";
     ready_ = true;
@@ -488,8 +506,9 @@ void Van::Start(int customer_id) {
     // get my node info
     if (is_scheduler_) {
       my_node_ = scheduler_;
-    } else {
-      auto role = Postoffice::Get()->is_worker() ? Node::WORKER : Node::SERVER;
+    }
+    if (Postoffice::Get()->is_trainer()) {
+      auto role = Node::TRAINER;
       const char* nhost = Environment::Get()->find("DMLC_NODE_HOST");
       std::string ip;
       if (nhost) ip = std::string(nhost);
@@ -517,6 +536,7 @@ void Van::Start(int customer_id) {
       my_node_.id = Node::kEmpty;
       my_node_.customer_id = customer_id;
     }
+
     ps::Postoffice::Get()->AddNodes({scheduler_.id}, Node::SCHEDULER);
 
     // bind.
@@ -623,9 +643,9 @@ int Van::Send(const Message& msg) {
   if (resender_) resender_->AddOutgoing(msg);
   if (Postoffice::Get()->verbose() >= 2) {
     if (!msg.meta.simple_app) {
-      PS_VLOG(3) << msg.DebugString();
+      PS_VLOG(1) << msg.DebugString();
     } else {
-      PS_VLOG(2) << msg.DebugString();
+      PS_VLOG(1) << msg.DebugString();
     }
   }
   return send_bytes;
@@ -651,12 +671,12 @@ void Van::Receiving() {
     recv_bytes_ += recv_bytes;
     if (Postoffice::Get()->verbose() >= 2) {
       if (!msg.meta.simple_app) {
-        PS_VLOG(3) << msg.DebugString();
+        PS_VLOG(1) << msg.DebugString();
       } else {
         if (msg.meta.head == 13)
-          PS_VLOG(3) << msg.DebugString();
+          PS_VLOG(1) << msg.DebugString();
         else
-          PS_VLOG(2) << msg.DebugString();
+          PS_VLOG(1) << msg.DebugString();
       }
     }
     // duplicated message

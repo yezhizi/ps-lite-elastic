@@ -84,6 +84,7 @@ class Postoffice {
   }
   const int get_init_num_servers() const { return init_num_servers_; }
   const int get_init_num_workers() const { return init_num_workers_; }
+  const int get_init_num_trainers() const { return init_num_trainers_; }
   /**
    * \brief return the key ranges of all server nodes
    */
@@ -121,15 +122,21 @@ class Postoffice {
   // TODO: delete this function
   static inline int ServerRankToID(int rank) { return rank * 2 + 8; }
   /**
+   * \brief convert from a trainer rank into a node id
+   * \param rank the trainer rank
+   */
+  // TODO: delete this function
+  static inline int TrainerRankToID(int rank) { return rank * 2 + 10; }
+  /**
    * \brief convert from a node id into a server or worker rank
    * \param id the node id
    */
-  int IDtoRank(int id, bool is_worker) {
+  int IDtoRank(int id, bool is_trainer) {
     // reffer to node_ids_ to get the rank
     std::lock_guard<std::mutex> lk(node_ids_mu_);
-    int node_group = is_worker ? kWorkerGroup : kServerGroup;
+    // int node_group = is_worker ? kWorkerGroup : kServerGroup;
     // get the rank of id in the node_group
-    std::vector<int>& nodes = node_ids_[node_group];
+    std::vector<int>& nodes = node_ids_[kTrainerGroup];
     std::sort(nodes.begin(), nodes.end());
     auto it = std::find(nodes.begin(), nodes.end(), id);
     if (it == nodes.end()) {
@@ -148,6 +155,13 @@ class Postoffice {
     std::lock_guard<std::mutex> lk(node_ids_mu_);
     return num_servers_;
   }
+
+  /** \brief Returns the number of trainer nodes */
+  int num_trainers() const {
+    std::lock_guard<std::mutex> lk(node_ids_mu_);
+    return num_trainers_;
+  }
+
   /** \brief Returns the rank of this node in its group
    *
    * Each worker will have a unique rank within [0, NumWorkers()). So are
@@ -157,15 +171,15 @@ class Postoffice {
     return IDtoRank(van_->my_node().id, van_->my_node().role == Node::WORKER);
   }
 
-  void UpdateScaleNodes(std::vector<int> node_ids, bool is_worker=false) {
-    if(node_ids.empty()){
+  void UpdateScaleNodes(std::vector<int> node_ids, bool is_trainer = false) {
+    if (node_ids.empty()) {
       CHECK(is_scale());
       van_->update_scale_status();
       return;
     }
     // check if the node is already in scale nodes
     ScaleMeta& scale_meta = van_->GetScaleMeta();
-    CHECK(scale_meta.IsWorkerScaling() == is_worker);
+    CHECK(scale_meta.IstrainerScaling() == is_trainer);
     CHECK(scale_meta.GetNodes().size() == node_ids.size());
     for (int node_id : node_ids) {
       auto it = std::find(scale_meta.GetNodes().begin(),
@@ -174,7 +188,7 @@ class Postoffice {
           << "Node " << node_id << " is not in scale nodes";
     }
     scale_meta.Clear();
-    AddNodes(node_ids, is_worker ? Node::WORKER : Node::SERVER);
+    AddNodes(node_ids, is_trainer ? Node::TRAINER : Node::SERVER);
 
     // for scalling nodes, update
     if (is_scale()) {
@@ -185,6 +199,8 @@ class Postoffice {
   int is_worker() const { return is_worker_; }
   /** \brief Returns true if this node is a server node. */
   int is_server() const { return is_server_; }
+  /** \brief Returns true if this node is a trainer node. */
+  int is_trainer() const { return is_trainer_; }
   /** \brief Returns true if this node is a scheduler node. */
   int is_scheduler() const { return is_scheduler_; }
   /** \brief Returns the verbose level. */
@@ -229,12 +245,13 @@ class Postoffice {
   mutable std::mutex node_ids_mu_;  // modify the node_ids_
   std::mutex server_key_ranges_mu_;
   std::vector<Range> server_key_ranges_;
-  bool is_worker_, is_server_, is_scheduler_;
+  bool is_worker_, is_server_, is_trainer_, is_scheduler_;
   int num_servers_ = 0;
   int num_workers_ = 0;
+  int num_trainers_ = 0;
 
   // initial number of nodes
-  int init_num_servers_, init_num_workers_;
+  int init_num_servers_, init_num_workers_, init_num_trainers_;
 
   std::mutex num_servers_mu_;  // modify the number of servers
   std::unordered_map<int, std::unordered_map<int, bool>> barrier_done_;

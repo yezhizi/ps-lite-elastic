@@ -6,7 +6,7 @@ void StartServer() {
   if (!IsServer()) return;
   auto server = new KVServer<float>(0);
   server->set_request_handle(KVServerDefaultHandle<float>());
-  RegisterExitCallback([server](){ delete server; });
+  RegisterExitCallback([server]() { delete server; });
 }
 
 void RunWorker(int customer_id) {
@@ -33,7 +33,7 @@ void RunWorker(int customer_id) {
     ts.push_back(kv.Push(keys, vals));
 
     // to avoid too frequency push, which leads huge memory usage
-    if (i > 10) kv.Wait(ts[ts.size()-10]);
+    if (i > 10) kv.Wait(ts[ts.size() - 10]);
   }
   for (int t : ts) kv.Wait(t);
 

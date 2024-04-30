@@ -17,18 +17,22 @@ void Postoffice::InitEnvironment() {
   van_ = Van::Create(van_type);
   val = CHECK_NOTNULL(Environment::Get()->find("DMLC_ROLE"));
   std::string role(val);
-  is_worker_ = role == "worker";
-  is_server_ = role == "server";
+  // is_worker_ = role == "worker";
+  // is_server_ = role == "server";
+  is_trainer_ = role == "trainer";
   is_scheduler_ = role == "scheduler";
 
   if (is_scheduler_) {
     // number of workers and servers
-    // when the number of worker and server reache the init_num_workers_ and init_num_servers_
-    // the training will start, after that the comming node will be added asynchronizely
-    val = CHECK_NOTNULL(Environment::Get()->find("DMLC_NUM_WORKER"));
-    init_num_workers_ = atoi(val);
-    val = CHECK_NOTNULL(Environment::Get()->find("DMLC_NUM_SERVER"));
-    init_num_servers_ = atoi(val);
+    // when the number of worker and server reache the init_num_workers_ and
+    // init_num_servers_ the training will start, after that the comming node
+    // will be added asynchronizely val =
+    // CHECK_NOTNULL(Environment::Get()->find("DMLC_NUM_WORKER"));
+    // init_num_workers_ = atoi(val);
+    // val = CHECK_NOTNULL(Environment::Get()->find("DMLC_NUM_SERVER"));
+    // init_num_servers_ = atoi(val);
+    val = CHECK_NOTNULL(Environment::Get()->find("DMLC_NUM_TRAINER"));
+    init_num_trainers_ = atoi(val);
   }
 
   verbose_ = GetEnv("PS_VERBOSE", 0);
@@ -60,16 +64,15 @@ void Postoffice::Start(int customer_id, const char* argv0,
   }
   start_mu_.unlock();
   // do a barrier here
-  if (do_barrier)
-    Barrier(customer_id, kWorkerGroup + kServerGroup + kScheduler);
+  if (do_barrier) Barrier(customer_id, kTrainerGroup + kScheduler);
 }
 
 void Postoffice::Finalize(const int customer_id, const bool do_barrier) {
-  if (do_barrier)
-    Barrier(customer_id, kWorkerGroup + kServerGroup + kScheduler);
+  if (do_barrier) Barrier(customer_id, kTrainerGroup + kScheduler);
   if (customer_id == 0) {
     num_workers_ = 0;
     num_servers_ = 0;
+    num_trainers_ = 0;
     van_->Stop();
     init_stage_ = 0;
     customers_.clear();
@@ -130,6 +133,8 @@ void Postoffice::Barrier(int customer_id, int node_group) {
     CHECK(node_group & kWorkerGroup);
   } else if (role == Node::SERVER) {
     CHECK(node_group & kServerGroup);
+  } else if (role == Node::TRAINER) {
+    CHECK(node_group & kTrainerGroup);
   }
 
   std::unique_lock<std::mutex> ulk(barrier_mu_);
@@ -179,8 +184,8 @@ std::vector<int> Postoffice::GetDeadNodes(int t) {
   if (!van_->IsReady() || t == 0) return dead_nodes;
 
   time_t curr_time = time(NULL);
-  const auto& nodes = is_scheduler_ ? GetNodeIDs(kWorkerGroup + kServerGroup)
-                                    : GetNodeIDs(kScheduler);
+  const auto& nodes =
+      is_scheduler_ ? GetNodeIDs(kTrainerGroup) : GetNodeIDs(kScheduler);
   {
     std::lock_guard<std::mutex> lk(heartbeat_mu_);
     for (int r : nodes) {
@@ -207,28 +212,25 @@ void Postoffice::clear_nodes() {
 void Postoffice::AddNodes(const std::vector<int>& node_ids,
                           const Node::Role role) {
   std::lock_guard<std::mutex> lk(node_ids_mu_);
-  if(role == Node::SCHEDULER){
+  if (role == Node::SCHEDULER) {
     CHECK_EQ(node_ids.size(), 1);
     CHECK_EQ(node_ids[0], kScheduler);
-    for (int g:{kScheduler, kScheduler + kServerGroup + kWorkerGroup,
-                kScheduler + kWorkerGroup, kScheduler + kServerGroup}) {
+    for (int g : {kScheduler, kScheduler + kTrainerGroup}) {
       if (std::find(node_ids_[g].begin(), node_ids_[g].end(), kScheduler) ==
           node_ids_[g].end()) {
         node_ids_[g].push_back(kScheduler);
-      }else{
+      } else {
         LOG(WARNING) << "Scheduler already exists";
       }
     }
     return;
   }
 
-  const int node_group = role == Node::SERVER ? kServerGroup : kWorkerGroup;
-  const int other_group = role == Node::SERVER ? kWorkerGroup : kServerGroup;
+  // const int node_group = role == Node::SERVER ? kServerGroup : kWorkerGroup;
+  // const int other_group = role == Node::SERVER ? kWorkerGroup : kServerGroup;
   for (int id : node_ids) {
     bool is_new = false;
-    for (int g :
-         {id, node_group, node_group + kScheduler, node_group + other_group,
-          node_group + kScheduler + other_group}) {
+    for (int g : {id, kTrainerGroup, kTrainerGroup + kScheduler}) {
       if (std::find(node_ids_[g].begin(), node_ids_[g].end(), id) ==
           node_ids_[g].end()) {
         node_ids_[g].push_back(id);
@@ -236,11 +238,12 @@ void Postoffice::AddNodes(const std::vector<int>& node_ids,
       }
     }
     if (is_new) {
-      if (role == Node::SERVER) {
-        ++num_servers_;
-      } else {
-        ++num_workers_;
-      }
+      // if (role == Node::SERVER) {
+      //   ++num_servers_;
+      // } else {
+      //   ++num_workers_;
+      // }
+      ++num_trainers_;
     }
   }
 }
@@ -248,13 +251,12 @@ void Postoffice::AddNodes(const std::vector<int>& node_ids,
 void Postoffice::RemoveNodes(const std::vector<int> node_ids,
                              const Node::Role role) {
   std::lock_guard<std::mutex> lk(node_ids_mu_);
-  const int node_group = role == Node::SERVER ? kServerGroup : kWorkerGroup;
-  const int other_group = role == Node::SERVER ? kWorkerGroup : kServerGroup;
+  // const int node_group = role == Node::SERVER ? kServerGroup : kWorkerGroup;
+  // const int other_group = role == Node::SERVER ? kWorkerGroup : kServerGroup;
+  const int node_group = kTrainerGroup;
   for (int id : node_ids) {
     bool is_removed = false;
-    for (int g :
-         {id, node_group, node_group + kScheduler, node_group + other_group,
-          node_group + kScheduler + other_group}) {
+    for (int g : {id, node_group, node_group + kScheduler}) {
       auto it = std::find(node_ids_[g].begin(), node_ids_[g].end(), id);
       if (it != node_ids_[g].end()) {
         node_ids_[g].erase(it);
@@ -262,20 +264,21 @@ void Postoffice::RemoveNodes(const std::vector<int> node_ids,
       }
     }
     if (is_removed) {
-      if (role == Node::SERVER) {
-        --num_servers_;
-      } else {
-        --num_workers_;
-      }
+      // if (role == Node::SERVER) {
+      //   --num_servers_;
+      // } else {
+      //   --num_workers_;
+      // }
+      --num_trainers_;
     }
   }
 }
 
-
 int Postoffice::GenNextID(Node::Role role) {
-  CHECK(role == Node::SERVER || role == Node::WORKER);
-  int node_group = role == Node::SERVER ? kServerGroup : kWorkerGroup;
-  int id_diff = role == Node::SERVER ? 8 : 9;
+  // CHECK(role == Node::SERVER || role == Node::WORKER);
+  CHECK(role == Node::TRAINER);
+  int node_group = kTrainerGroup;
+  int id_diff = 10;  // trainer id = rank * 2 + 10
   std::lock_guard<std::mutex> lk(node_ids_mu_);
   // woker id = rank * 2 + 9; server id = rank * 2 + 8
   std::vector<int> ids = node_ids_[node_group];
