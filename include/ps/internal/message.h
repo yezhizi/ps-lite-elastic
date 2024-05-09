@@ -66,21 +66,20 @@ struct Node {
   /** \brief default constructor */
   Node() : id(kEmpty), port(kEmpty), is_recovery(false) {}
   /** \brief node roles */
-  enum Role { SERVER, WORKER, SCHEDULER };
+  enum Role { TRAINER, SCHEDULER };
   /** \brief get debug string */
   std::string DebugString() const {
     std::stringstream ss;
-    ss << "role=" << (role == SERVER ? "server" : (role == WORKER ? "worker" : "scheduler"))
+    ss << "role=" << (role == TRAINER ? "trainer" :  "scheduler")
        << (id != kEmpty ? ", id=" + std::to_string(id) : "")
        << ", ip=" << hostname << ", port=" << port << ", is_recovery=" << is_recovery
        << ", is_scale=" << is_scale;
-
 
     return ss.str();
   }
   /** \brief get short debug string */
   std::string ShortDebugString() const {
-    std::string str = role == SERVER ? "S" : (role == WORKER ? "W" : "H");
+    std::string str = role == TRAINER ? "T": "H";
     if (id != kEmpty) str += "[" + std::to_string(id) + "]";
     return str;
   }

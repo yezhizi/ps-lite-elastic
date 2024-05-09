@@ -18,16 +18,8 @@ using Key = uint64_t;
 static const Key kMaxKey = std::numeric_limits<Key>::max();
 /** \brief node ID for the scheduler */
 static const int kScheduler = 1;
-/**
- * \brief the server node group ID
- *
- * group id can be combined:
- * - kServerGroup + kScheduler means all server nodes and the scheuduler
- * - kServerGroup + kWorkerGroup means all server and worker nodes
- */
-static const int kServerGroup = 2;
-/** \brief the worker node group ID */
-static const int kWorkerGroup = 4;
+/** \brief node group ID for the trainer */
+static const int kTrainerGroup = 1;
 
 static const int SignalBound = 100;
 

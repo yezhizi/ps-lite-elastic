@@ -209,6 +209,8 @@ class Van {
   std::atomic<int> timestamp_{0};
   int init_stage = 0;
 
+  Meta expect_nodes_;
+
   std::atomic<bool> is_scale_processing_{false};
 
   Meta nodes_list_;
@@ -219,6 +221,7 @@ class Van {
 
   bool is_first_barrier_done_ = false;
 
+  Meta& GetExpectNodes();
 
   int SendSingnaltoController(kControllerSignal signal, const std::string &body);
   /**

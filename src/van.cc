@@ -489,7 +489,7 @@ void Van::Start(int customer_id) {
     if (is_scheduler_) {
       my_node_ = scheduler_;
     } else {
-      auto role = Postoffice::Get()->is_worker() ? Node::WORKER : Node::SERVER;
+      auto role = Node::TRAINER;
       const char* nhost = Environment::Get()->find("DMLC_NODE_HOST");
       std::string ip;
       if (nhost) ip = std::string(nhost);
@@ -516,6 +516,9 @@ void Van::Start(int customer_id) {
       // set it explicitly to make re-register within a same process possible
       my_node_.id = Node::kEmpty;
       my_node_.customer_id = customer_id;
+
+      //get expected nodes
+      this->GetExpectNodes();
     }
     ps::Postoffice::Get()->AddNodes({scheduler_.id}, Node::SCHEDULER);
 
@@ -545,7 +548,11 @@ void Van::Start(int customer_id) {
     customer_specific_node.customer_id = customer_id;
     msg.meta.recver = kScheduler;
     msg.meta.control.cmd = Control::ADD_NODE;
+    // the node[0] is my node and remainings are the nodes that expected to be connected
     msg.meta.control.node.push_back(customer_specific_node);
+    // get the nodes that expected to be connected
+    auto& expect_nodes = this->GetExpectNodes().control.node;
+    msg.meta.control.node.insert(msg.meta.control.node.end(), expect_nodes.begin(), expect_nodes.end());
     msg.meta.timestamp = timestamp_++;
     Send(msg);
   }
@@ -829,5 +836,36 @@ int Van::SendSingnaltoController(kControllerSignal signal,
   CHECK_NE(ret, -1);
   PS_VLOG(1) << "Send signal to controller " << static_cast<int>(signal);
   return ret;
+}
+Meta& Van::GetExpectNodes() {
+  if (this->expect_nodes_.control.node.size() != 0) {
+    return this->expect_nodes_;
+  }
+  // DMLC_PS_EXPECTED_NODES=192.169.1.1:6000;192.169.1.2:7000
+  std::string node_str = GetEnv("DMLC_PS_EXPECTED_NODES", "");
+  if (node_str.length() > 0) {
+    // split the nodes by ;
+    std::vector<std::string> node_list;
+    std::string::size_type start = 0;
+    std::string::size_type end = node_str.find(";");
+    while (end != std::string::npos) {
+      node_list.push_back(node_str.substr(start, end - start));
+      start = end + 1;
+      end = node_str.find(";", start);
+    }
+    node_list.push_back(node_str.substr(start));
+    for (auto& node : node_list) {
+      std::string::size_type pos = node.find(":");
+      CHECK(pos != std::string::npos) << "invalid format of node " << node<<", should be ip:port";
+      std::string ip = node.substr(0, pos);
+      int port = atoi(node.substr(pos + 1).c_str());
+      Node n;
+      n.hostname = ip;
+      n.port = port;
+      n.role = Node::TRAINER;
+      expect_nodes_.control.node.push_back(n);
+    }
+  }
+  return this->expect_nodes_;
 }
 }  // namespace ps
