@@ -570,13 +570,6 @@ class IBVerbsVan : public Van {
     CHECK_NE(node.port, node.kEmpty);
     CHECK(node.hostname.size());
 
-    // worker doesn't need to connect to the other workers. same for server
-    // worker may need to connect to other workers in the future
-    if ((node.role == Node::SERVER) && (my_node_.role == Node::SERVER) &&
-        (node.id != my_node_.id)) {
-      return;
-    }
-
     std::string node_host_ip = node.hostname + ":" + std::to_string(node.port);
     if (node.id != Node::kEmpty) {
       auto it = endpoints_.find(node.id);

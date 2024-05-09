@@ -119,12 +119,6 @@ class ZMQVan : public Van {
     if (it != senders_.end()) {
       zmq_close(it->second);
     }
-    // worker doesn't need to connect to the other workers. same for server
-    // worker may need to connect to other workers in the future
-    if ((node.role == Node::SERVER) && (my_node_.role == Node::SERVER) &&
-        (node.id != my_node_.id)) {
-      return;
-    }
     void *sender = zmq_socket(context_, ZMQ_DEALER);
     CHECK(sender != NULL)
         << zmq_strerror(errno)

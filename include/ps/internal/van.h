@@ -196,8 +196,7 @@ class Van {
   std::atomic<bool> ready_{false};
   std::atomic<size_t> send_bytes_{0};
   size_t recv_bytes_ = 0;
-  int num_servers_ = 0;
-  int num_workers_ = 0;
+  int num_trainers_=0; 
   /** the thread for receiving messages */
   std::unique_ptr<std::thread> receiver_thread_;
   /** the thread for sending heartbeat */

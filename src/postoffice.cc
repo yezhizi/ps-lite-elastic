@@ -193,7 +193,7 @@ void Postoffice::ClearNodes() {
 }
 
 void Postoffice::AddNodes(const std::vector<int>& node_ids,
-                          const Node::Role role=Node::TRAINER) {
+                          const Node::Role role) {
   std::lock_guard<std::mutex> lk(node_ids_mu_);
   if(role == Node::SCHEDULER){
     CHECK_EQ(node_ids.size(), 1);
@@ -221,12 +221,14 @@ void Postoffice::AddNodes(const std::vector<int>& node_ids,
     }
     if (is_new) {
       ++this->num_trainers_;
+    }else{
+      LOG(WARNING) << "Node " << id << " already exists";
     }
   }
 }
 
 void Postoffice::RemoveNodes(const std::vector<int> node_ids,
-                             const Node::Role role = Node::TRAINER) {
+                             const Node::Role role) {
   std::lock_guard<std::mutex> lk(node_ids_mu_);
 
   for (int id : node_ids) {

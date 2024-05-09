@@ -20,9 +20,9 @@ class Postoffice {
  public:
   void ClearNodes();
 
-  void AddNodes(const std::vector<int>& node_ids, const Node::Role role);
+  void AddNodes(const std::vector<int>& node_ids, const Node::Role role=Node::TRAINER);
 
-  void RemoveNodes(const std::vector<int> node_ids, const Node::Role role);
+  void RemoveNodes(const std::vector<int> node_ids, const Node::Role role=Node::TRAINER);
 
   int GenNextID();
 
@@ -112,10 +112,14 @@ class Postoffice {
    * \param rank the worker rank
    */
 
-  /** \brief Returns the number of server nodes */
+  /** \brief Returns the number of trainer nodes */
   int num_trainers() const {
     std::lock_guard<std::mutex> lk(node_ids_mu_);
     return num_trainers_;
+  }
+  /** \brief Returns the number of trainer nodes */
+  int init_num_trainers() const {
+    return init_trainer_num_;
   }
   /** \brief Returns the rank of this node in its group
    */
@@ -149,7 +153,7 @@ class Postoffice {
   //   }
   // }
   /** \brief Returns true if this node is a trainer node */
-  bool is_trainer() const {return is_trainer;}
+  bool is_trainer() const {return is_trainer_;}
   /** \brief Returns true if this node is a scheduler node. */
   int is_scheduler() const { return is_scheduler_; }
   /** \brief Returns the verbose level. */
