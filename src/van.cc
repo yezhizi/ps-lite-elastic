@@ -76,9 +76,6 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
       } else {
         LOG(WARNING) << "node " << node.DebugString()
                      << " already connected before";
-        // auto id = Postoffice::Get()->GenNextID();
-        // shared_node_mapping_[id] = connected_nodes_[node_host_ip];
-        // node.id = connected_nodes_[node_host_ip];
       }
       // update the recorded nodes
       if (role == Node::TRAINER) ++num_trainers_;
@@ -92,18 +89,29 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
 
       // check if all the expected nodes are registered
       std::vector<int> targets;
-      for (auto& expect_node : expect_nodes) {
-        auto expect_node_host_ip =
-            expect_node.hostname + ":" + std::to_string(expect_node.port);
-        if (connected_nodes_.find(expect_node_host_ip) ==
-            connected_nodes_.end()) {
-          LOG(WARNING) << "The node " << node.DebugString()
-                       << " expected to be connected to the unregistered node "
-                       << expect_node.DebugString() << " is not connected";
-          continue;
+      if (Environment::Get()->find("DEBUG_OVERLAY")) {
+        // send add node msg to all nodes
+        for (auto& n : nodes->control.node) {
+          if (n.id != node.id) {
+            targets.push_back(n.id);
+          }
         }
-        targets.push_back(connected_nodes_[expect_node_host_ip]);
+      } else {
+        for (auto& expect_node : expect_nodes) {
+          auto expect_node_host_ip =
+              expect_node.hostname + ":" + std::to_string(expect_node.port);
+          if (connected_nodes_.find(expect_node_host_ip) ==
+              connected_nodes_.end()) {
+            LOG(WARNING)
+                << "The node " << node.DebugString()
+                << " expected to be connected to the unregistered node "
+                << expect_node.DebugString() << " is not connected";
+            continue;
+          }
+          targets.push_back(connected_nodes_[expect_node_host_ip]);
+        }
       }
+
       //send add node msg to the expected nodes
       Message back;
       back.meta.control.cmd = Control::ADD_NODE;
@@ -260,10 +268,6 @@ void Van::ProcessBarrierCommand(Message* msg) {
   }
   int group = ctrl.barrier_group;
   int count_total;
-  // the flag 'is_first_barrier_done_' is uesd to wait all initial nodes to
-  // add in . the initial nodes are added synchronously . when all initial
-  // nodes are added, the first barrier is done, and the training can start.
-  // the initial nodes number is defined in the scheduler env variable
   count_total = static_cast<int>(Postoffice::Get()->GetNodeIDs(group).size());
   ++barrier_count_[group];
   PS_VLOG(1) << "Barrier count for " << group << " : " << barrier_count_[group];
@@ -364,10 +368,19 @@ void Van::ProcessAddNodeCommand(Message* msg, Meta* nodes,
     for (const auto& node : ctrl.node) {
       std::string addr_str = node.hostname + ":" + std::to_string(node.port);
       if (connected_nodes_.find(addr_str) == connected_nodes_.end()) {
-        // Connect() don't connect the node if the role  is same
-        Connect(node);
-        if (!node.is_recovery ) {
-          //TODO:check if the nodes are expected
+        if (!node.is_recovery) {
+          // TODO:check if the nodes are expected
+          auto& expect_nodes = this->expect_nodes_.control.node;
+          if (std::find_if(expect_nodes.begin(), expect_nodes.end(),
+                           [&node](const Node& n) {
+                             return n.hostname == node.hostname &&
+                                    n.port == node.port;
+                           }) == expect_nodes.end()) {
+            LOG(WARNING) << "The node " << node.DebugString()
+                         << " is not expected to be connected";
+            continue;
+          }
+          Connect(node);
           ++num_trainers_;
           targets.push_back(node.id);
         };
@@ -431,8 +444,7 @@ void Van::Start(int customer_id) {
       // get expected nodes
       this->GetExpectNodes();
     }
-    ps::Postoffice::Get()->AddNodes({scheduler_.id}, Node::SCHEDULER);
-
+    
     // bind.
     my_node_.port = Bind(my_node_, is_scheduler_ ? 0 : 40);
     PS_VLOG(1) << "Bind to " << my_node_.DebugString();
@@ -440,6 +452,7 @@ void Van::Start(int customer_id) {
 
     // connect to the scheduler
     Connect(scheduler_);
+    ps::Postoffice::Get()->AddNodes({scheduler_.id}, Node::SCHEDULER);
 
     // for debug use
     if (Environment::Get()->find("PS_DROP_MSG")) {

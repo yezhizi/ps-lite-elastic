@@ -248,7 +248,7 @@ void Postoffice::RemoveNodes(const std::vector<int> node_ids,
 
 int Postoffice::GenNextID() {
   std::lock_guard<std::mutex> lk(node_ids_mu_);
-  int id = this->num_trainers_ + 1;
+  int id = this->num_trainers_ + 10;
   return id;
 }
 

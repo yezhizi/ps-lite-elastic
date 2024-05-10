@@ -13,7 +13,7 @@ int generate_random_number(int min, int max) {
 int main(int argc, char *argv[]) {
   ps::StartAsync(0);
   if(!ps::Postoffice::Get()->is_scale()){
-    ps::Postoffice::Get()->Barrier(0, ps::kWorkerGroup + ps::kServerGroup + ps::kScheduler);
+    ps::Postoffice::Get()->Barrier(0, ps::kTrainerGroup + ps::kScheduler);
   }
   std::cout<< "Start !!" << std::endl;
   bool is_scheduler = ps::IsScheduler();
