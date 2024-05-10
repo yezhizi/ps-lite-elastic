@@ -7,6 +7,7 @@
 #include "ps/internal/postoffice.h"
 #include "ps/internal/message.h"
 #include "ps/base.h"
+#include "postoffice.h"
 
 namespace ps {
 Postoffice::Postoffice() { env_ref_ = Environment::_GetSharedRef(); }
@@ -247,9 +248,43 @@ void Postoffice::RemoveNodes(const std::vector<int> node_ids,
 }
 
 int Postoffice::GenNextID() {
+  CHECK(is_scheduler_);
   std::lock_guard<std::mutex> lk(node_ids_mu_);
-  int id = this->num_trainers_ + 10;
+  auto& nodes = this->node_ids_[kTrainerGroup];
+  std::sort(nodes.begin(), nodes.end());
+  //10 11 13 14 => 12   10 11 12 => 13  get the first missing id number
+  int id = nodes[0];
+  for (size_t i = 1; i < nodes.size(); ++i) {
+    if (nodes[i] != id) {
+      break;
+    }
+    ++id;
+  }
   return id;
 }
 
+void Postoffice::UpdateOverlay(int node_id, const std::vector<int>& children) {
+  CHECK(is_scheduler_);
+  this->overlay_graph_[node_id].children = children;
+}
+
+constelltion::OverlayTopo Postoffice::GetGlobalOverlay() const {
+  return constelltion::OverlayTopo();
+}
+
+void Postoffice::UpdateLocalTrans(int parent,
+                                  const std::vector<int>& children) {
+  CHECK(is_trainer_);
+  this->local_trans_topo_.parent = parent this->local_trans_topo_.children =
+      children;
+}
+const int Postoffice::GetMyParent() const {
+  CHECK(is_trainer_);
+  CHECK_GE(this->local_trans_topo_.parent, 0);
+  return this->local_trans_topo_.parent;
+}
+const std::vector<int>& Postoffice::GetMyChildren() const {
+  CHECK(is_trainer_);
+  return this->local_trans_topo_.children;
+}
 }  // namespace ps

@@ -5,6 +5,7 @@
 #define PS_BASE_H_
 #include <limits>
 #include "ps/internal/utils.h"
+#include "./constellation_base.h"
 namespace ps {
 
 #if USE_KEY32
@@ -19,7 +20,7 @@ static const Key kMaxKey = std::numeric_limits<Key>::max();
 /** \brief node ID for the scheduler */
 static const int kScheduler = 1;
 /** \brief node group ID for the trainer */
-static const int kTrainerGroup = 1;
+static const int kTrainerGroup = 2;
 
 static const int SignalBound = 100;
 
@@ -27,5 +28,8 @@ enum class kControllerSignal{
     kAddNodeSignal = 101,
 };
 
+
+
 }  // namespace ps
+
 #endif  // PS_BASE_H_

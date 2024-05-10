@@ -18,15 +18,64 @@ namespace ps {
  */
 class Postoffice {
  public:
+  /*----------maintain the registered nodes----------*/
+  /**
+   * \brief clear the registered nodes
+   */
   void ClearNodes();
+  /**
+   * \brief register a node to the system
+   * \param node the added node
+   */
+  void AddNodes(const std::vector<int>& node_ids,
+                const Node::Role role = Node::TRAINER);
+  /**
+   * \brief unregister a node from the system
+   * \param node the removed node
+   */
+  void RemoveNodes(const std::vector<int> node_ids,
+                   const Node::Role role = Node::TRAINER);
 
-  void AddNodes(const std::vector<int>& node_ids, const Node::Role role=Node::TRAINER);
-
-  void RemoveNodes(const std::vector<int> node_ids, const Node::Role role=Node::TRAINER);
-
+  /**
+   * \brief generate a new unique node id
+   */
   int GenNextID();
 
+  //TODO:del this
   bool is_scale() const { return van_->my_node().is_scale; }
+
+  /*----------maintain the topos----------*/
+
+  /**
+   * \brief update the overlay topo
+   * \param node_id the node id
+   * \param children the children of this node
+   */
+  void UpdateOverlay(int node_id, const std::vector<int>& children);
+
+  /**
+   * \brief get the global overlay topo
+   * \param node_id the node id
+   * \param children the children of this node
+   */
+  constelltion::OverlayTopo GetGlobalOverlay() const;
+
+  /**
+   * \brief update the local transport topo
+   * \param parent the parent of this node
+   * \param children the children of this node
+   */
+  void UpdateLocalTrans(int parent, const std::vector<int>& children);
+
+  /**
+   * \brief get the parent of local transport topo
+   */
+  const int GetMyParent() const;
+
+  /**
+   * \brief get the children of local transport topo
+   */
+  const std::vector<int>& GetMyChildren() const;
 
   /**
    * \brief return the singleton object
@@ -118,15 +167,11 @@ class Postoffice {
     return num_trainers_;
   }
   /** \brief Returns the number of trainer nodes */
-  int init_num_trainers() const {
-    return init_trainer_num_;
-  }
+  int init_num_trainers() const { return init_trainer_num_; }
   /** \brief Returns the rank of this node in its group
    */
-  //TODO: implement this function
-  int my_rank() {
-    return 0;
-  }
+  // TODO: implement this function
+  int my_rank() { return 0; }
 
   // void UpdateScaleNodes(std::vector<int> node_ids, bool is_worker=false) {
   //   if(node_ids.empty()){
@@ -153,7 +198,7 @@ class Postoffice {
   //   }
   // }
   /** \brief Returns true if this node is a trainer node */
-  bool is_trainer() const {return is_trainer_;}
+  bool is_trainer() const { return is_trainer_; }
   /** \brief Returns true if this node is a scheduler node. */
   int is_scheduler() const { return is_scheduler_; }
   /** \brief Returns the verbose level. */
@@ -201,8 +246,16 @@ class Postoffice {
   bool is_trainer_, is_scheduler_;
 
   int init_trainer_num_;
-
   int num_trainers_ = 0;
+
+  /** \brief the overall overlay topo of the connection */
+  constelltion::OverlayTopo overlay_graph_;
+
+  /** \brief the local transport topology */
+  constelltion::NodeTransTopo local_trans_topo_;
+
+  /** \brief the global transport topology */
+  std::unordered_map<int, constelltion::NodeTransTopo> global_trans_topo_;
 
   std::unordered_map<int, std::unordered_map<int, bool>> barrier_done_;
   int verbose_;
