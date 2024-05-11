@@ -559,134 +559,33 @@ void KVTrainer<Val>::Response(const KVMeta& req, const KVPairs<Val>& res) {
   Postoffice::Get()->van()->Send(msg);
 }
 
-
 /**
- * \brief A server node for maintaining key-value pairs
+ * \brief A Controller node that handle the requests from trainer nodes
+ * A simple wrapper of SimpleApp for controller nodes
  */
-template <typename Val>
-class KVServer : public SimpleApp {
+class Controller : public SimpleApp {
  public:
-  /**
-   * \brief constructor
-   * \param app_id the app id, should match with \ref KVWorker's id
-   */
-  explicit KVServer(int app_id) : SimpleApp() {
+  explicit Controller(int app_id) : SimpleApp() {
     using namespace std::placeholders;
-    obj_ = new Customer(app_id, app_id, std::bind(&KVServer<Val>::Process, this, _1));
+    obj_ =
+        new Customer(app_id, app_id, std::bind(&Controller::Process, this, _1));
   }
-
-  /** \brief deconstructor */
-  virtual ~KVServer() { delete obj_; obj_ = nullptr; }
-
-  /**
-   * \brief the handle to process a push/pull request from a worker
-   * \param req_meta meta-info of this request
-   * \param req_data kv pairs of this request
-   * \param server this pointer
-   */
-  using ReqHandle = std::function<void(const KVMeta& req_meta,
-                                       const KVPairs<Val>& req_data,
-                                       KVServer* server)>;
-  void set_request_handle(const ReqHandle& request_handle) {
+  virtual ~Controller() {
+    delete obj_;
+    obj_ = nullptr;
+  }
+  void set_request_handle(const Handle& request_handle) {
     CHECK(request_handle) << "invalid request handle";
-    request_handle_ = request_handle;
+    SimpleApp::set_request_handle(request_handle);
   }
-
-  /**
-   * \brief response to the push/pull request
-   * \param req the meta-info of the request
-   * \param res the kv pairs that will send back to the worker
-   */
-  void Response(const KVMeta& req, const KVPairs<Val>& res = KVPairs<Val>());
+  void set_response_handle(const Handle& response_handle) {
+    CHECK(response_handle) << "invalid response handle";
+    SimpleApp::set_response_handle(response_handle);
+  }
 
  private:
-  /** \brief internal receive handle */
-  void Process(const Message& msg);
-  /** \brief request handle */
-  ReqHandle request_handle_;
+  void Process(const Message& msg) { SimpleApp::Process(msg); }
 };
-
-
-/**
- * \brief an example handle adding pushed kv into store
- */
-template <typename Val>
-struct KVServerDefaultHandle {
-  void operator()(
-      const KVMeta& req_meta, const KVPairs<Val>& req_data, KVServer<Val>* server) {
-    size_t n = req_data.keys.size();
-    KVPairs<Val> res;
-    if (!req_meta.pull) {
-      CHECK_EQ(n, req_data.vals.size());
-    } else {
-      res.keys = req_data.keys; res.vals.resize(n);
-    }
-    for (size_t i = 0; i < n; ++i) {
-      Key key = req_data.keys[i];
-      if (req_meta.push) {
-        store[key] += req_data.vals[i];
-      }
-      if (req_meta.pull) {
-        res.vals[i] = store[key];
-      }
-    }
-    server->Response(req_meta, res);
-  }
-  std::unordered_map<Key, Val> store;
-};
-
-
-///////////////////////////////////////////////////////////////////////////////
-
-template <typename Val>
-void KVServer<Val>::Process(const Message& msg) {
-  if (msg.meta.simple_app) {
-    SimpleApp::Process(msg); return;
-  }
-  KVMeta meta;
-  meta.cmd       = msg.meta.head;
-  meta.push      = msg.meta.push;
-  meta.pull      = msg.meta.pull;
-  meta.sender    = msg.meta.sender;
-  meta.timestamp = msg.meta.timestamp;
-  meta.customer_id = msg.meta.customer_id;
-  KVPairs<Val> data;
-  int n = msg.data.size();
-  if (n) {
-    CHECK_GE(n, 2);
-    data.keys = msg.data[0];
-    data.vals = msg.data[1];
-    if (n > 2) {
-      CHECK_EQ(n, 3);
-      data.lens = msg.data[2];
-      CHECK_EQ(data.lens.size(), data.keys.size());
-    }
-  }
-  CHECK(request_handle_);
-  request_handle_(meta, data, this);
-}
-
-template <typename Val>
-void KVServer<Val>::Response(const KVMeta& req, const KVPairs<Val>& res) {
-  Message msg;
-  msg.meta.app_id = obj_->app_id();
-  msg.meta.customer_id = req.customer_id;
-  msg.meta.request     = false;
-  msg.meta.push        = req.push;
-  msg.meta.pull        = req.pull;
-  msg.meta.head        = req.cmd;
-  msg.meta.timestamp   = req.timestamp;
-  msg.meta.recver      = req.sender;
-  if (res.keys.size()) {
-    msg.AddData(res.keys);
-    msg.AddData(res.vals);
-    if (res.lens.size()) {
-      msg.AddData(res.lens);
-    }
-  }
-  Postoffice::Get()->van()->Send(msg);
-}
-
 
 }  // namespace ps
 #endif  // PS_KV_APP_H_
