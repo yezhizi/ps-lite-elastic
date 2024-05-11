@@ -41,9 +41,6 @@ class Postoffice {
    */
   int GenNextID();
 
-  //TODO:del this
-  bool is_scale() const { return van_->my_node().is_scale; }
-
   /*----------maintain the topos----------*/
 
   /**
@@ -170,8 +167,6 @@ class Postoffice {
   int init_num_trainers() const { return init_trainer_num_; }
   /** \brief Returns the rank of this node in its group
    */
-  // TODO: implement this function
-  int my_rank() { return 0; }
 
   // void UpdateScaleNodes(std::vector<int> node_ids, bool is_worker=false) {
   //   if(node_ids.empty()){

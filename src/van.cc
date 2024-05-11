@@ -66,7 +66,6 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
       std::string node_host_ip =
           node.hostname + ":" + std::to_string(node.port);
       if (connected_nodes_.find(node_host_ip) == connected_nodes_.end()) {
-        // TODO: need modify GetNextID
         auto id = Postoffice::Get()->GenNextID();
         node.id = id;
         PS_VLOG(1) << "assign id=" << id << " to node " << node.DebugString();
@@ -132,12 +131,8 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
       back.meta.timestamp = timestamp_++;
       Send(back);
 
-      //TODO:update overlay
-
-      if(Postoffice::Get()->num_trainers()>=Postoffice::Get()->init_num_trainers()){
-        //TODO: 需要判断是否是同步加入阶段
-        SendSingnaltoController(kControllerSignal::kAddNodeSignal, "");
-      }
+      // update overlay
+      Postoffice::Get()->UpdateOverlay(node.id, targets);
     }
     ready_ = true;
   } else {

@@ -265,8 +265,9 @@ class KVTrainer: public SimpleApp{
             int cmd = 0,
             const Callback& cb = nullptr,
             int priority = 0) {
-    //TODO: get father node id
-    int ts = obj_->NewRequest({10});
+    int parent = Postoffice::Get()->GetMyParent();
+    CHECK_GE(parent,kMinTrainerID);
+    int ts = obj_->NewRequest();
     AddCallback(ts, cb);
     KVPairs<Val> kvs;
     kvs.keys = keys;
@@ -382,8 +383,9 @@ template <typename C, typename D>
 int KVTrainer<Val>::AddPullCB(
     const SArray<Key>& keys, C* vals, D* lens, int cmd,
     const Callback& cb) {
-  //TODO: get father node
-  int ts = obj_->NewRequest({10});
+  int parent = Postoffice::Get()->GetMyParent();
+  CHECK_GE(parent,kMinTrainerID);
+  int ts = obj_->NewRequest();
   AddCallback(ts, [this, ts, keys, vals, lens, cb]() mutable {
       mu_.lock();
       auto& kvs = recv_kvs_[ts];
@@ -460,7 +462,7 @@ void KVTrainer<Val>::RunCallback(int timestamp) {
 template <typename Val>             
 void KVTrainer<Val>::Send(int timestamp, bool push, bool pull, int cmd, const KVPairs<Val>& kvs) {
 
-  //TODO:get the father node id
+  int parent = Postoffice::Get()->GetMyParent();
   Message msg;
   msg.meta.app_id = obj_->app_id();
   msg.meta.customer_id = obj_->customer_id();
@@ -469,7 +471,7 @@ void KVTrainer<Val>::Send(int timestamp, bool push, bool pull, int cmd, const KV
   msg.meta.pull        = pull;
   msg.meta.head        = cmd; 
   msg.meta.timestamp   = timestamp;
-  msg.meta.recver      = 10;
+  msg.meta.recver      = parent;
   msg.meta.priority    = kvs.priority;
   if (kvs.keys.size()) {
     msg.AddData(kvs.keys);

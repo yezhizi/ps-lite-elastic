@@ -22,6 +22,12 @@ Customer::~Customer() {
   recv_thread_->join();
 }
 
+int Customer::NewRequest() {
+  std::lock_guard<std::mutex> lk(tracker_mu_);
+  tracker_.push_back(std::make_pair(1, 0));
+  return tracker_.size() - 1;
+}
+
 int Customer::NewRequest(int recver) {
   std::lock_guard<std::mutex> lk(tracker_mu_);
   int num = Postoffice::Get()->GetNodeIDs(recver).size();

@@ -21,6 +21,8 @@ static const Key kMaxKey = std::numeric_limits<Key>::max();
 static const int kScheduler = 1;
 /** \brief node group ID for the trainer */
 static const int kTrainerGroup = 2;
+/** \brief the minimum ID for the trainer */
+static const int kMinTrainerID = 10;
 
 static const int SignalBound = 100;
 

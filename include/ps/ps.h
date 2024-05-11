@@ -18,12 +18,6 @@ inline int NumTrainers() {return Postoffice::Get()->num_trainers();}
 inline bool IsTrainer() { return Postoffice::Get()->is_trainer(); }
 /** \brief Returns true if this node is a scheduler node. */
 inline bool IsScheduler() { return Postoffice::Get()->is_scheduler(); }
-/** \brief Returns the rank of this node in its group
- *
- * Each worker will have a unique rank within [0, NumWorkers()). So are
- * servers. This function is available only after \ref Start has been called.
- */
-inline int MyRank() { return Postoffice::Get()->my_rank(); }
 /**
  * \brief start the system
  *

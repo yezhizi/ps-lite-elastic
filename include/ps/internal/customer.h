@@ -57,6 +57,12 @@ class Customer {
   inline int customer_id() { return customer_id_; }
 
   /**
+   * \brief get a timestamp for a new request, only one target. threadsafe
+   * \return the timestamp of this request
+   */
+  int NewRequest();
+
+  /**
    * \brief get a timestamp for a new request. threadsafe
    * \param recver the receive node id of this request
    * \return the timestamp of this request
