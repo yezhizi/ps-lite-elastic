@@ -52,6 +52,16 @@ class SimpleApp {
    * @return the timestamp of this request
    */
   virtual inline int Request(int req_head, const std::string& req_body, int recv_id);
+  
+  /**
+   * \brief send a request to a remote node
+   *
+   * \param req_head request head
+   * \param req_body {id, body} type: std::unordered_map<int, std::string> request body. {id, body}
+   *
+   * @return the timestamp of this request
+   */
+  virtual inline int SimpleApp::Request(int req_head, const std::unordered_map<int, std::string>& req_body);
 
   /**
    * \brief wait until a request is finished
@@ -133,7 +143,7 @@ inline int SimpleApp::Request(int req_head, const std::string& req_body, int rec
   Message msg;
   msg.meta.head = req_head;
   if (req_body.size()) msg.meta.body = req_body;
-  int ts = obj_->NewRequest(recv_id);
+  int ts = obj_->NewRequest();
   msg.meta.timestamp = ts;
   msg.meta.request = true;
   msg.meta.simple_app = true;
@@ -143,6 +153,32 @@ inline int SimpleApp::Request(int req_head, const std::string& req_body, int rec
   // send
   for (int r : Postoffice::Get()->GetNodeIDs(recv_id)) {
     msg.meta.recver = r;
+    Postoffice::Get()->van()->Send(msg);
+  }
+  return ts;
+}
+
+inline int SimpleApp::Request(
+    int req_head, const std::unordered_map<int, std::string>& req_body) {
+  int size = req_body.size();
+  CHECK_GT(size, 0);
+  std::vector<int> recvers;
+  for (const auto& entry : req_body) {
+    recvers.push_back(entry.first);
+  }
+  // setup message
+  Message msg;
+  msg.meta.head = req_head;
+  int ts = obj_->NewRequest(recvers);
+  for (const auto& entry : req_body) {
+    int recv_id = entry.first;
+    msg.meta.recver = recv_id;
+    if (entry.second.size()) msg.meta.body = entry.second;
+    msg.meta.timestamp = ts;
+    msg.meta.request = true;
+    msg.meta.simple_app = true;
+    msg.meta.app_id = obj_->app_id();
+    msg.meta.customer_id = obj_->customer_id();
     Postoffice::Get()->van()->Send(msg);
   }
   return ts;
