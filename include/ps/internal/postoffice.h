@@ -18,6 +18,7 @@ namespace ps {
  */
 class Postoffice {
  public:
+  using AdjacencyList = std::unordered_map<int, std::vector<int>>;
   /*----------maintain the registered nodes----------*/
   /**
    * \brief clear the registered nodes
@@ -55,7 +56,7 @@ class Postoffice {
    * \param node_id the node id
    * \param children the children of this node
    */
-  constellation::AdjacencyList GetGlobalOverlay() const;
+  AdjacencyList GetGlobalOverlay() const;
 
   /**
    * \brief check if the two nodes are connected in the overlay
@@ -63,7 +64,7 @@ class Postoffice {
    * \param b the node id
    * \return true if connected
    */
-  bool isOverlayNodesConected(const int a , const int b) const;
+  bool isOverlayNodesConected(const int a, const int b) const;
 
   /**
    * \brief get the overlay neighbour of a node
@@ -259,13 +260,13 @@ class Postoffice {
   int num_trainers_ = 0;
 
   /** \brief the overall overlay topo of the connection */
-  constellation::AdjacencyList overlay_graph_;
+  AdjacencyList overlay_graph_;
 
   /** \brief the local transport topology */
-  constellation::NodeTransTopo local_trans_topo_;
-
-  /** \brief the global transport topology */
-  std::unordered_map<int, constellation::NodeTransTopo> global_trans_topo_;
+  struct TransTopo {
+    int parent = 0;
+    std::vector<int> children;
+  } local_trans_topo_;
 
   std::unordered_map<int, std::unordered_map<int, bool>> barrier_done_;
   int verbose_;

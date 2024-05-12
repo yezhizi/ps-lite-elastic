@@ -5,7 +5,6 @@
 #define PS_BASE_H_
 #include <limits>
 #include "ps/internal/utils.h"
-#include "./constellation_base.h"
 namespace ps {
 
 #if USE_KEY32
