@@ -7,7 +7,7 @@
 namespace constellation {
 
 /** @brief Overlay topology*/
-using OverlayTopo = std::unordered_map<int, std::vector<int>>;
+using AdjacencyList = std::unordered_map<int, std::vector<int>>;
 /** @brief Node transport topology
  * including member parent and children
  * - parent: the parent of this node, `0` - idecates the topo not set, `1` -

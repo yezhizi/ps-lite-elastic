@@ -48,14 +48,29 @@ class Postoffice {
    * \param node_id the node id
    * \param children the children of this node
    */
-  void UpdateOverlay(int node_id, const std::vector<int>& children);
+  void UpdateOverlay(int node_id, const std::vector<int>& neighbour);
 
   /**
    * \brief get the global overlay topo
    * \param node_id the node id
    * \param children the children of this node
    */
-  constellation::OverlayTopo GetGlobalOverlay() const;
+  constellation::AdjacencyList GetGlobalOverlay() const;
+
+  /**
+   * \brief check if the two nodes are connected in the overlay
+   * \param a the node id
+   * \param b the node id
+   * \return true if connected
+   */
+  bool isOverlayNodesConected(const int a , const int b) const;
+
+  /**
+   * \brief get the overlay neighbour of a node
+   * \param node_id the node id
+   * \return the neighbour node ids
+   */
+  std::vector<int>& GetOverlayNeighbour(int node_id);
 
   /**
    * \brief update the local transport topo
@@ -244,7 +259,7 @@ class Postoffice {
   int num_trainers_ = 0;
 
   /** \brief the overall overlay topo of the connection */
-  constellation::OverlayTopo overlay_graph_;
+  constellation::AdjacencyList overlay_graph_;
 
   /** \brief the local transport topology */
   constellation::NodeTransTopo local_trans_topo_;

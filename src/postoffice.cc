@@ -265,13 +265,37 @@ int Postoffice::GenNextID() {
   return id;
 }
 
-void Postoffice::UpdateOverlay(int node_id, const std::vector<int>& children) {
+void Postoffice::UpdateOverlay(int node_id, const std::vector<int>& neighbour) {
   CHECK(is_scheduler_);
-  this->overlay_graph_[node_id] = children;
+  this->overlay_graph_[node_id] = neighbour;
+  for(auto &id:neighbour){
+    //check if the neighbour is in the graph
+    auto it = this->overlay_graph_.find(id);
+    CHECK(it != this->overlay_graph_.end());
+    //check if the node is in the neighbour's neighbour
+    auto it2 = std::find(it->second.begin(), it->second.end(), node_id);
+    CHECK(it2 == it->second.end());
+    it->second.push_back(node_id);
+  }
 }
 
-constellation::OverlayTopo Postoffice::GetGlobalOverlay() const {
-  return constellation::OverlayTopo();
+constellation::AdjacencyList Postoffice::GetGlobalOverlay() const {
+  return constellation::AdjacencyList();
+}
+
+bool Postoffice::isOverlayNodesConected(const int a , const int b) const {
+  auto it = this->overlay_graph_.find(a);
+  if(it == overlay_graph_.end()){
+    return false;
+  }
+  auto it2 = std::find(it->second.begin(), it->second.end(), b);
+  return it2 != it->second.end();
+}
+
+std::vector<int>& Postoffice::GetOverlayNeighbour(int node_id){
+  auto it = this->overlay_graph_.find(node_id);
+  CHECK(it != this->overlay_graph_.end());
+  return it->second;
 }
 
 void Postoffice::UpdateLocalTrans(int parent,
