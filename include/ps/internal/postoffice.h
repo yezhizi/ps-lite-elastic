@@ -55,7 +55,7 @@ class Postoffice {
    * \param node_id the node id
    * \param children the children of this node
    */
-  constelltion::OverlayTopo GetGlobalOverlay() const;
+  constellation::OverlayTopo GetGlobalOverlay() const;
 
   /**
    * \brief update the local transport topo
@@ -244,13 +244,13 @@ class Postoffice {
   int num_trainers_ = 0;
 
   /** \brief the overall overlay topo of the connection */
-  constelltion::OverlayTopo overlay_graph_;
+  constellation::OverlayTopo overlay_graph_;
 
   /** \brief the local transport topology */
-  constelltion::NodeTransTopo local_trans_topo_;
+  constellation::NodeTransTopo local_trans_topo_;
 
   /** \brief the global transport topology */
-  std::unordered_map<int, constelltion::NodeTransTopo> global_trans_topo_;
+  std::unordered_map<int, constellation::NodeTransTopo> global_trans_topo_;
 
   std::unordered_map<int, std::unordered_map<int, bool>> barrier_done_;
   int verbose_;

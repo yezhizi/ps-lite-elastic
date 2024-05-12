@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace constelltion {
+namespace constellation {
 
 /** @brief Overlay topology*/
 using OverlayTopo = std::unordered_map<int, std::vector<int>>;
@@ -19,6 +19,13 @@ struct NodeTransTopo {
   std::vector<int> children;
 };
 
-}  // namespace constelltion
+static const int SignalBound = 100;
+
+enum class kControllerSignal{
+    kAddNodeSignal = 101,
+    kNodeReadySignal = 102,
+};
+
+}  // namespace constellation
 
 #endif  // _CONSTELLATION_BASH_H_

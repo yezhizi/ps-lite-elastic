@@ -24,14 +24,6 @@ static const int kTrainerGroup = 2;
 /** \brief the minimum ID for the trainer */
 static const int kMinTrainerID = 10;
 
-static const int SignalBound = 100;
-
-enum class kControllerSignal{
-    kAddNodeSignal = 101,
-};
-
-
-
 }  // namespace ps
 
 #endif  // PS_BASE_H_

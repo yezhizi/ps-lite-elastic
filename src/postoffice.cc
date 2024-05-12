@@ -270,8 +270,8 @@ void Postoffice::UpdateOverlay(int node_id, const std::vector<int>& children) {
   this->overlay_graph_[node_id] = children;
 }
 
-constelltion::OverlayTopo Postoffice::GetGlobalOverlay() const {
-  return constelltion::OverlayTopo();
+constellation::OverlayTopo Postoffice::GetGlobalOverlay() const {
+  return constellation::OverlayTopo();
 }
 
 void Postoffice::UpdateLocalTrans(int parent,
