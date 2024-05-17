@@ -61,7 +61,7 @@ class SimpleApp {
    *
    * @return the timestamp of this request
    */
-  virtual inline int SimpleApp::Request(int req_head, const std::unordered_map<int, std::string>& req_body);
+  virtual inline int Request(int req_head, const std::unordered_map<int, std::string>& req_body);
 
   /**
    * \brief wait until a request is finished

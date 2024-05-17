@@ -56,7 +56,7 @@ class Postoffice {
    * \param node_id the node id
    * \param children the children of this node
    */
-  AdjacencyList GetGlobalOverlay() const;
+  const AdjacencyList& GetGlobalOverlay() const;
 
   /**
    * \brief check if the two nodes are connected in the overlay

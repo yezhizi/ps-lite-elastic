@@ -279,8 +279,8 @@ void Postoffice::UpdateOverlay(int node_id, const std::vector<int>& neighbour) {
   }
 }
 
-constellation::AdjacencyList Postoffice::GetGlobalOverlay() const {
-  return constellation::AdjacencyList();
+const Postoffice::AdjacencyList& Postoffice::GetGlobalOverlay() const {
+  return this->overlay_graph_;
 }
 
 bool Postoffice::isOverlayNodesConected(const int a , const int b) const {

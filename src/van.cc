@@ -740,23 +740,23 @@ void Van::Heartbeat() {
     Send(msg);
   }
 }
-int Van::SendSingnaltoController(kControllerSignal signal,
-                                 const std::string& body) {
-  CHECK_EQ(my_node_.role, Node::SCHEDULER);
-  Message msg;
-  msg.meta.app_id = 0;
-  msg.meta.head = static_cast<int>(signal);
-  if (!body.empty()) msg.meta.body = body;
-  msg.meta.timestamp = timestamp_++;
-  msg.meta.request = true;
-  msg.meta.customer_id = 0;
-  msg.meta.recver = kScheduler;
-  msg.meta.simple_app = true;
-  int ret = Send(msg);
-  CHECK_NE(ret, -1);
-  PS_VLOG(1) << "Send signal to controller " << static_cast<int>(signal);
-  return ret;
-}
+// int Van::SendSingnaltoController(kControllerSignal signal,
+//                                  const std::string& body) {
+//   CHECK_EQ(my_node_.role, Node::SCHEDULER);
+//   Message msg;
+//   msg.meta.app_id = 0;
+//   msg.meta.head = static_cast<int>(signal);
+//   if (!body.empty()) msg.meta.body = body;
+//   msg.meta.timestamp = timestamp_++;
+//   msg.meta.request = true;
+//   msg.meta.customer_id = 0;
+//   msg.meta.recver = kScheduler;
+//   msg.meta.simple_app = true;
+//   int ret = Send(msg);
+//   CHECK_NE(ret, -1);
+//   PS_VLOG(1) << "Send signal to controller " << static_cast<int>(signal);
+//   return ret;
+// }
 Meta& Van::GetExpectNodes() {
   if (this->expect_nodes_.control.node.size() != 0) {
     return this->expect_nodes_;

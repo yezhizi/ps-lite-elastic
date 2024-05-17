@@ -222,7 +222,7 @@ class Van {
 
   Meta& GetExpectNodes();
 
-  int SendSingnaltoController(kControllerSignal signal, const std::string &body);
+  // int SendSingnaltoController(kControllerSignal signal, const std::string &body);
   /**
    * \brief processing logic of AddNode message for scheduler
    */
