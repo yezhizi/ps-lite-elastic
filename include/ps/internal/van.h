@@ -207,6 +207,9 @@ class Van {
   int drop_rate_ = 0;
   std::atomic<int> timestamp_{0};
   int init_stage = 0;
+  
+  /** whether overlay debug mode is on */
+  bool debug_overlay_;
 
   Meta expect_nodes_;
 

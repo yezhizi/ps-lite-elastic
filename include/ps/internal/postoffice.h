@@ -80,6 +80,10 @@ class Postoffice {
    */
   void UpdateLocalTrans(int parent, const std::vector<int>& children);
 
+  const int GetMyID() const{
+    return van_->my_node().id;
+  }
+
   /**
    * \brief get the parent of local transport topo
    */

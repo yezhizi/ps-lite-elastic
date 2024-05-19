@@ -81,19 +81,18 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
 
       Postoffice::Get()->AddNodes({node.id});
       if(std::find_if(nodes->control.node.begin(), nodes->control.node.end(),
-                      [&node](const Node& n) { return n.id == node.id; }) ==
-         nodes->control.node.end()) {
+                       [&node](const Node& n) { return n.id == node.id; }) ==
+          nodes->control.node.end()) {
         nodes->control.node.push_back(node);
       }
 
       // check if all the expected nodes are registered
       std::vector<int> targets;
-      if (Environment::Get()->find("DEBUG_OVERLAY")) {
+      if (debug_overlay_) {
         // send add node msg to all nodes
         for (auto& n : nodes->control.node) {
-          if (n.id != node.id) {
-            targets.push_back(n.id);
-          }
+          if (n.id == kScheduler ||n.id==node.id ) continue;
+          targets.push_back(n.id);
         }
       } else {
         for (auto& expect_node : expect_nodes) {
@@ -111,19 +110,20 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
         }
       }
 
-      //send add node msg to the expected nodes
+      // send add node msg to the expected nodes
       Message back;
       back.meta.control.cmd = Control::ADD_NODE;
-      for(auto target:targets){
+      for (auto target : targets) {
         back.meta.control.node.push_back(node);
         back.meta.recver = target;
         back.meta.timestamp = timestamp_++;
         Send(back);
       }
-      //send back to the new node
+      // send back to the new node
       back.meta.control.node.clear();
-      for(auto& n: nodes->control.node){
-        if(std::find(targets.begin(), targets.end(), n.id) != targets.end()){
+      for (auto& n : nodes->control.node) {
+        if (n.id == node.id || n.id == kScheduler ||
+            std::find(targets.begin(), targets.end(), n.id) != targets.end()) {
           back.meta.control.node.push_back(n);
         }
       }
@@ -149,9 +149,9 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
         // do not try to send anything to dead node
         continue;
       }
-      //TODO: need send only overlay topology, not all nodes
-      // only send recovery_node to nodes already exist
-      // but send all nodes to the recovery_node
+      // TODO: need send only overlay topology, not all nodes
+      //  only send recovery_node to nodes already exist
+      //  but send all nodes to the recovery_node
       back.meta =
           (r == recovery_nodes->control.node[0].id) ? *nodes : *recovery_nodes;
       back.meta.recver = r;
@@ -167,7 +167,8 @@ void Van::ProcessDelNodeCommandAtScheduler(Message* msg, Meta* nodes) {
   // CHECK_EQ(ctrl.node.size(), 1);
   // auto& outcoming_node = ctrl.node[0];
   // CHECK_NE(outcoming_node.id, Meta::kEmpty) << "node id is empty";
-  // auto it = std::find_if(nodes->control.node.begin(), nodes->control.node.end(),
+  // auto it = std::find_if(nodes->control.node.begin(),
+  // nodes->control.node.end(),
   //                        [&outcoming_node](const Node& node) {
   //                          return node.id == outcoming_node.id;
   //                        });
@@ -224,13 +225,14 @@ void Van::UpdateLocalID(Message* msg, std::unordered_set<int>* deadnodes_set,
       // TODO: may no need to setenv DMLC_RANK
       // setenv may is not thread safe
       // keep the IDtoRank and RanktoID mapping
-//       std::string rank = std::to_string(
-//           Postoffice::Get()->IDtoRank(node.id, my_node_.role == Node::WORKER));
-// #ifdef _MSC_VER
-//       _putenv_s("DMLC_RANK", rank.c_str());
-// #else
-//       setenv("DMLC_RANK", rank.c_str(), true);
-// #endif
+      //       std::string rank = std::to_string(
+      //           Postoffice::Get()->IDtoRank(node.id, my_node_.role ==
+      //           Node::WORKER));
+      // #ifdef _MSC_VER
+      //       _putenv_s("DMLC_RANK", rank.c_str());
+      // #else
+      //       setenv("DMLC_RANK", rank.c_str(), true);
+      // #endif
     }
   }
 }
@@ -365,16 +367,17 @@ void Van::ProcessAddNodeCommand(Message* msg, Meta* nodes,
       if (connected_nodes_.find(addr_str) == connected_nodes_.end()) {
         if (!node.is_recovery) {
           // TODO:check if the nodes are expected
-          auto& expect_nodes = this->expect_nodes_.control.node;
-          if (std::find_if(expect_nodes.begin(), expect_nodes.end(),
-                           [&node](const Node& n) {
-                             return n.hostname == node.hostname &&
-                                    n.port == node.port;
-                           }) == expect_nodes.end()) {
-            LOG(WARNING) << "The node " << node.DebugString()
-                         << " is not expected to be connected";
-            continue;
-          }
+          // auto& expect_nodes = this->expect_nodes_.control.node;
+          // if (!debug_overlay_ && std::find_if(expect_nodes.begin(),
+          // expect_nodes.end(),
+          //                  [&node](const Node& n) {
+          //                    return n.hostname == node.hostname &&
+          //                           n.port == node.port;
+          //                  }) == expect_nodes.end()) {
+          //   LOG(WARNING) << "The node " << node.DebugString()
+          //                << " is not expected to be connected";
+          //   continue;
+          // }
           Connect(node);
           ++num_trainers_;
           targets.push_back(node.id);
@@ -439,7 +442,9 @@ void Van::Start(int customer_id) {
       // get expected nodes
       this->GetExpectNodes();
     }
-    
+    // overlay debug
+    debug_overlay_ =
+        CHECK_NOTNULL(Environment::Get()->find("DEBUG_OVERLAY")) ? true : false;
     // bind.
     my_node_.port = Bind(my_node_, is_scheduler_ ? 0 : 40);
     PS_VLOG(1) << "Bind to " << my_node_.DebugString();
@@ -447,7 +452,7 @@ void Van::Start(int customer_id) {
 
     // connect to the scheduler
     Connect(scheduler_);
-    ps::Postoffice::Get()->AddNodes({scheduler_.id}, Node::SCHEDULER);
+    // ps::Postoffice::Get()->AddNodes({scheduler_.id}, Node::SCHEDULER);
 
     // for debug use
     if (Environment::Get()->find("PS_DROP_MSG")) {
@@ -758,6 +763,9 @@ void Van::Heartbeat() {
 //   return ret;
 // }
 Meta& Van::GetExpectNodes() {
+  if (debug_overlay_) {
+    return this->expect_nodes_;
+  }
   if (this->expect_nodes_.control.node.size() != 0) {
     return this->expect_nodes_;
   }

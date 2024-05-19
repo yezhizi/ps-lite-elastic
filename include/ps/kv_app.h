@@ -98,6 +98,11 @@ class KVTrainer: public SimpleApp{
   /** \brief deconstructor */
   virtual ~KVTrainer() { delete obj_; obj_ = nullptr; }
 
+  void set_request_handle(const ReqHandle& request_handle) {
+    CHECK(request_handle) << "invalid request handle";
+    this->request_handle_ = request_handle;
+  }
+
     /**
    * \brief Pushes a list of key-value pairs to all server nodes.
    *

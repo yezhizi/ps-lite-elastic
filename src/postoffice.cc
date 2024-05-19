@@ -256,7 +256,7 @@ int Postoffice::GenNextID() {
   std::sort(nodes.begin(), nodes.end());
   //10 11 13 14 => 12   10 11 12 => 13  get the first missing id number
   int id = kMinTrainerID;
-  for (size_t i = 1; i < nodes.size(); ++i) {
+  for (size_t i = 0; i < nodes.size(); ++i) {
     if (nodes[i] != id) {
       break;
     }
