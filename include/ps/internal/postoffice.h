@@ -173,15 +173,19 @@ class Postoffice {
    * \param cb the callback function
    */
   void RegisterExitCallback(const Callback& cb) { exit_callback_ = cb; }
-  /**
-   * \brief convert from a worker rank into a node id
-   * \param rank the worker rank
-   */
 
   /** \brief Returns the number of trainer nodes */
   int num_trainers() const {
     std::lock_guard<std::mutex> lk(node_ids_mu_);
     return num_trainers_;
+  }
+  int myRank()const {
+    CHECK(is_trainer_);
+    int id = van_->my_node().id;
+    auto ids = GetNodeIDs(kTrainerGroup); // copy
+    // get rank
+    std::sort(ids.begin(), ids.end());
+    return std::distance(ids.begin(), std::lower_bound(ids.begin(), ids.end(), id))-1;
   }
   /** \brief Returns the number of trainer nodes */
   int init_num_trainers() const { return init_trainer_num_; }

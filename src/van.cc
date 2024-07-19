@@ -80,7 +80,7 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
       if (role == Node::TRAINER) ++num_trainers_;
 
       Postoffice::Get()->AddNodes({node.id});
-      if(std::find_if(nodes->control.node.begin(), nodes->control.node.end(),
+      if (std::find_if(nodes->control.node.begin(), nodes->control.node.end(),
                        [&node](const Node& n) { return n.id == node.id; }) ==
           nodes->control.node.end()) {
         nodes->control.node.push_back(node);
@@ -91,7 +91,7 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
       if (debug_overlay_) {
         // send add node msg to all nodes
         for (auto& n : nodes->control.node) {
-          if (n.id == kScheduler ||n.id==node.id ) continue;
+          if (n.id == kScheduler || n.id == node.id) continue;
           targets.push_back(n.id);
         }
       } else {
@@ -380,8 +380,12 @@ void Van::ProcessAddNodeCommand(Message* msg, Meta* nodes,
           // }
           Connect(node);
           ++num_trainers_;
+          if (node.id == kScheduler) {
+            Postoffice::Get()->AddNodes({kScheduler}, Node::Role::SCHEDULER);
+          } else {
           targets.push_back(node.id);
-        };
+          }
+        }
       }
       connected_nodes_[addr_str] = node.id;
     }
@@ -526,7 +530,6 @@ void Van::SendDelMsg() {
 }
 
 void Van::Stop() {
-
   // stop threads
   Message exit;
   exit.meta.control.cmd = Control::TERMINATE;
