@@ -200,6 +200,8 @@ struct Meta {
   int data_size = 0;  
   /** \brief message priority */
   int priority = 0;
+  /** \brief extra information */
+  std::string extra;
 };
 /**
  * \brief messages that communicated amaong nodes.

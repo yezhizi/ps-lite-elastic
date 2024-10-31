@@ -383,13 +383,13 @@ void Van::ProcessAddNodeCommand(Message* msg, Meta* nodes,
           if (node.id == kScheduler) {
             Postoffice::Get()->AddNodes({kScheduler}, Node::Role::SCHEDULER);
           } else {
-          targets.push_back(node.id);
+            targets.push_back(node.id);
           }
         }
       }
       connected_nodes_[addr_str] = node.id;
     }
-    if (Postoffice::Get()->verbose() >= 2){
+    if (Postoffice::Get()->verbose() >= 2) {
       LOG_MAP(" id=") << "connected nodes" << connected_nodes_;
     }
 
@@ -660,6 +660,7 @@ void Van::PackMeta(const Meta& meta, char** meta_buf, int* buf_size) {
   if (meta.app_id != Meta::kEmpty) pb.set_app_id(meta.app_id);
   if (meta.timestamp != Meta::kEmpty) pb.set_timestamp(meta.timestamp);
   if (meta.body.size()) pb.set_body(meta.body);
+  if (meta.extra.size()) pb.set_extra(meta.extra);
   pb.set_push(meta.push);
   pb.set_pull(meta.pull);
   pb.set_request(meta.request);
@@ -712,6 +713,7 @@ void Van::UnpackMeta(const char* meta_buf, int buf_size, Meta* meta) {
   meta->body = pb.body();
   meta->customer_id = pb.customer_id();
   meta->data_type.resize(pb.data_type_size());
+  meta->extra = pb.extra();
   for (int i = 0; i < pb.data_type_size(); ++i) {
     meta->data_type[i] = static_cast<DataType>(pb.data_type(i));
   }

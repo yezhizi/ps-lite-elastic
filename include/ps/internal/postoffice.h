@@ -80,9 +80,7 @@ class Postoffice {
    */
   void UpdateLocalTrans(int parent, const std::vector<int>& children);
 
-  const int GetMyID() const{
-    return van_->my_node().id;
-  }
+  const int GetMyID() const { return van_->my_node().id; }
 
   /**
    * \brief get the parent of local transport topo
@@ -150,6 +148,16 @@ class Postoffice {
   }
 
   /**
+   * \brief check if a node is connected
+   */
+  bool isNodeConnected(int node_id) const {
+    std::lock_guard<std::mutex> lk(node_ids_mu_);
+    const auto& trainers = node_ids_.at(kTrainerGroup);
+    return std::find(trainers.begin(), trainers.end(), node_id) !=
+           trainers.end();
+  }
+
+  /**
    * \brief return the key ranges of all server nodes
    */
   const std::vector<Range>& GetServerKeyRanges();
@@ -179,13 +187,15 @@ class Postoffice {
     std::lock_guard<std::mutex> lk(node_ids_mu_);
     return num_trainers_;
   }
-  int myRank()const {
+  int myRank() const {
     CHECK(is_trainer_);
     int id = van_->my_node().id;
-    auto ids = GetNodeIDs(kTrainerGroup); // copy
+    auto ids = GetNodeIDs(kTrainerGroup);  // copy
     // get rank
     std::sort(ids.begin(), ids.end());
-    return std::distance(ids.begin(), std::lower_bound(ids.begin(), ids.end(), id))-1;
+    return std::distance(ids.begin(),
+                         std::lower_bound(ids.begin(), ids.end(), id)) -
+           1;
   }
   /** \brief Returns the number of trainer nodes */
   int init_num_trainers() const { return init_trainer_num_; }
@@ -293,6 +303,6 @@ class Postoffice {
 };
 
 /** \brief verbose log */
-#define PS_VLOG(x) LOG_IF(INFO, x <= Postoffice::Get()->verbose())
+#define PS_VLOG(x) LOG_IF(INFO, x <= ps::Postoffice::Get()->verbose())
 }  // namespace ps
 #endif  // PS_INTERNAL_POSTOFFICE_H_

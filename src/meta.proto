@@ -59,4 +59,6 @@ message PBMeta {
   optional int32 data_size = 11;
   // priority
   optional int32 priority = 13 [default = 0];
+  // extra bytes
+  optional bytes extra = 14;
 }

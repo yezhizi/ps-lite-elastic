@@ -25,6 +25,8 @@ struct KVMeta {
   int timestamp;
   /** \brief the customer id of worker */
   int customer_id;
+  /** \brief the extra information */
+  std::string extra;
 };
 
 /**
@@ -331,6 +333,28 @@ class KVTrainer: public SimpleApp{
     return ts;
   }
 
+  int ZMove(int next,
+            const SArray<Key>& keys,
+            const SArray<Val>& vals,
+            const SArray<int>& lens = {},
+            const std::string& extra = "",
+            int cmd = 0,
+            const Callback& cb = nullptr,
+            int priority = 0) {
+    int myid = Postoffice::Get()->GetMyID();
+    CHECK(Postoffice::Get()->isNodeConnected(next));
+
+    int ts = obj_->NewRequest();
+    AddCallback(ts, cb);
+    KVPairs<Val> kvs;
+    kvs.keys = keys;
+    kvs.vals = vals;
+    kvs.lens = lens;
+    kvs.priority = priority;
+    Sendto(next, ts, true, false, cmd, kvs, extra);
+    return ts;
+  }
+
   /**
    * \brief response to the push/pull request
    * \param req the meta-info of the request
@@ -365,10 +389,22 @@ class KVTrainer: public SimpleApp{
      * \brief send the kv list to all servers
      * @param timestamp the timestamp of the request
      * @param push whether or not it is a push request
+     * @param pull whether or not it is a pull request
+     * @param cmd command
+     */
+    void Send(int timestamp, bool push, bool pull, int cmd, const KVPairs<Val>& kvs, 
+              const std::string& extra = "");
+
+    /** \brief send the kv list to the target server 
+     * @param target the target server id
+     * @param timestamp the timestamp of the request
+     * @param push whether or not it is a push request
      * @param push whether or not it is a pull request
      * @param cmd command
      */
-    void Send(int timestamp, bool push, bool pull, int cmd, const KVPairs<Val>& kvs);
+    void Sendto(int target, int timestamp, bool push, bool pull, int cmd, const KVPairs<Val>& kvs, 
+              const std::string& extra = "");
+              
     /** \brief internal receive handle */
     void Process(const Message& msg);
 
@@ -465,9 +501,16 @@ void KVTrainer<Val>::RunCallback(int timestamp) {
 }
 
 template <typename Val>             
-void KVTrainer<Val>::Send(int timestamp, bool push, bool pull, int cmd, const KVPairs<Val>& kvs) {
+void KVTrainer<Val>::Send(int timestamp, bool push, bool pull, int cmd, const KVPairs<Val>& kvs,
+                          const std::string& extra) {
 
   int parent = Postoffice::Get()->GetMyParent();
+  Sendto(parent, timestamp, push, pull, cmd, kvs, extra);
+}
+
+template <typename Val>
+void KVTrainer<Val>::Sendto(int target, int timestamp, bool push, bool pull, int cmd, const KVPairs<Val>& kvs, 
+              const std::string& extra){
   Message msg;
   msg.meta.app_id = obj_->app_id();
   msg.meta.customer_id = obj_->customer_id();
@@ -476,8 +519,9 @@ void KVTrainer<Val>::Send(int timestamp, bool push, bool pull, int cmd, const KV
   msg.meta.pull        = pull;
   msg.meta.head        = cmd; 
   msg.meta.timestamp   = timestamp;
-  msg.meta.recver      = parent;
+  msg.meta.recver      = target;
   msg.meta.priority    = kvs.priority;
+  msg.meta.extra       = extra;
   if (kvs.keys.size()) {
     msg.AddData(kvs.keys);
     msg.AddData(kvs.vals);
@@ -487,7 +531,6 @@ void KVTrainer<Val>::Send(int timestamp, bool push, bool pull, int cmd, const KV
   }
   Postoffice::Get()->van()->Send(msg);
 }
-
 
 
 template <typename Val>
@@ -502,6 +545,7 @@ void KVTrainer<Val>::Process(const Message& msg) {
   meta.sender    = msg.meta.sender;
   meta.timestamp = msg.meta.timestamp;
   meta.customer_id = msg.meta.customer_id;
+  meta.extra     = msg.meta.extra;
   KVPairs<Val> kvs;
   int ts = msg.meta.timestamp;
   int n = msg.data.size();
@@ -517,13 +561,6 @@ void KVTrainer<Val>::Process(const Message& msg) {
   }
   if(msg.meta.request){
     // Trainer  recv push/pull request
-    KVMeta meta;
-    meta.cmd = msg.meta.head;
-    meta.push = msg.meta.push;
-    meta.pull = msg.meta.pull;
-    meta.sender = msg.meta.sender;
-    meta.timestamp = msg.meta.timestamp;
-    meta.customer_id = msg.meta.customer_id;
     CHECK(this->request_handle_);
     this->request_handle_(meta, kvs, this);
   }else{
