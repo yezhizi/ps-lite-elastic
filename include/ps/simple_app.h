@@ -170,7 +170,7 @@ inline int SimpleApp::Request(
   Message msg;
   msg.meta.head = req_head;
   int ts = obj_->NewRequest(recvers);
-  for (const auto& entry : req_body) {
+  for (const auto& entry : req_body) { 
     int recv_id = entry.first;
     msg.meta.recver = recv_id;
     if (entry.second.size()) msg.meta.body = entry.second;

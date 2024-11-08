@@ -285,6 +285,7 @@ class Postoffice {
     int parent = 0;
     std::vector<int> children;
   } local_trans_topo_;
+  mutable std::mutex local_trans_topo_mu_;
 
   std::unordered_map<int, std::unordered_map<int, bool>> barrier_done_;
   int verbose_;

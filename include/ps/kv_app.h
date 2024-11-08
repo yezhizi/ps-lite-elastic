@@ -320,6 +320,7 @@ class KVTrainer: public SimpleApp{
                 SArray<Val>* outs,
                 SArray<int>* lens = nullptr,
                 int cmd = 0,
+                const std::string& extra = nullptr,
                 const Callback& cb = nullptr,
                 int priority = 0) {
     int ts = AddPullCB(keys, outs, lens, cmd, cb);
@@ -329,7 +330,7 @@ class KVTrainer: public SimpleApp{
     kvs.priority = priority;
     if (lens)
       kvs.lens = *lens;
-    Send(ts, true, true, cmd, kvs);
+    Send(ts, true, true, cmd, kvs, extra);
     return ts;
   }
 

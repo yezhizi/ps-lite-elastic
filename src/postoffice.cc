@@ -301,15 +301,18 @@ std::vector<int>& Postoffice::GetOverlayNeighbour(int node_id){
 void Postoffice::UpdateLocalTrans(int parent,
                                   const std::vector<int>& children) {
   CHECK(is_trainer_);
+  std::lock_guard<std::mutex> lk(local_trans_topo_mu_);
   this->local_trans_topo_.parent = parent;
   this->local_trans_topo_.children = children;
 }
 const int Postoffice::GetMyParent() const {
   CHECK(is_trainer_);
+  std::lock_guard<std::mutex> lk(local_trans_topo_mu_);
   CHECK_GE(this->local_trans_topo_.parent, 0);
   return this->local_trans_topo_.parent;
 }
 const std::vector<int>& Postoffice::GetMyChildren() const {
+  std::lock_guard<std::mutex> lk(local_trans_topo_mu_);
   CHECK(is_trainer_);
   return this->local_trans_topo_.children;
 }

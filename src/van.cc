@@ -389,9 +389,9 @@ void Van::ProcessAddNodeCommand(Message* msg, Meta* nodes,
       }
       connected_nodes_[addr_str] = node.id;
     }
-    if (Postoffice::Get()->verbose() >= 2) {
-      LOG_MAP(" id=") << "connected nodes" << connected_nodes_;
-    }
+    // if (Postoffice::Get()->verbose() >= 2) {
+    //   LOG_MAP(" id=") << "connected nodes" << connected_nodes_;
+    // }
 
     Postoffice::Get()->AddNodes(targets);
     ready_ = true;
