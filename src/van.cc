@@ -363,6 +363,7 @@ void Van::ProcessAddNodeCommand(Message* msg, Meta* nodes,
     // Incremental Update
     std::vector<int> targets;
     for (const auto& node : ctrl.node) {
+
       std::string addr_str = node.hostname + ":" + std::to_string(node.port);
       if (connected_nodes_.find(addr_str) == connected_nodes_.end()) {
         if (!node.is_recovery) {
@@ -378,11 +379,13 @@ void Van::ProcessAddNodeCommand(Message* msg, Meta* nodes,
           //                << " is not expected to be connected";
           //   continue;
           // }
-          Connect(node);
-          ++num_trainers_;
+          
           if (node.id == kScheduler) {
+            Connect(scheduler_);
             Postoffice::Get()->AddNodes({kScheduler}, Node::Role::SCHEDULER);
           } else {
+            Connect(node);
+            ++num_trainers_;
             targets.push_back(node.id);
           }
         }
