@@ -18,7 +18,7 @@ void Postoffice::InitEnvironment() {
   val = CHECK_NOTNULL(Environment::Get()->find("DMLC_ROLE"));
   std::string role(val);
   is_scheduler_ = role == "scheduler";
-  is_trainer_ = role=="trainer";
+  is_trainer_ = role == "trainer";
   if (is_scheduler_) {
     val = CHECK_NOTNULL(Environment::Get()->find("START_TRAINER_NUM"));
     init_trainer_num_ = atoi(val);
@@ -53,13 +53,11 @@ void Postoffice::Start(int customer_id, const char* argv0,
   }
   start_mu_.unlock();
   // do a barrier here
-  if (do_barrier)
-    Barrier(customer_id, kScheduler+kTrainerGroup);
+  if (do_barrier) Barrier(customer_id, kScheduler + kTrainerGroup);
 }
 
 void Postoffice::Finalize(const int customer_id, const bool do_barrier) {
-  if (do_barrier)
-    Barrier(customer_id, kScheduler+kTrainerGroup);
+  if (do_barrier) Barrier(customer_id, kScheduler + kTrainerGroup);
   if (customer_id == 0) {
     init_trainer_num_ = 0;
     van_->Stop();
@@ -120,7 +118,7 @@ void Postoffice::Barrier(int customer_id, int node_group) {
     CHECK(node_group & kScheduler);
   } else if (role == Node::TRAINER) {
     CHECK(node_group & kTrainerGroup);
-  } 
+  }
 
   std::unique_lock<std::mutex> ulk(barrier_mu_);
   barrier_done_[0][customer_id] = false;
@@ -143,7 +141,8 @@ void Postoffice::Barrier(int customer_id, int node_group) {
 //   if (server_key_ranges_.empty()) {
 //     for (int i = 0; i < num_servers_; ++i) {
 //       server_key_ranges_.push_back(
-//           Range(kMaxKey / num_servers_ * i, kMaxKey / num_servers_ * (i + 1)));
+//           Range(kMaxKey / num_servers_ * i, kMaxKey / num_servers_ * (i +
+//           1)));
 //     }
 //   }
 //   server_key_ranges_mu_.unlock();
@@ -169,8 +168,8 @@ std::vector<int> Postoffice::GetDeadNodes(int t) {
   if (!van_->IsReady() || t == 0) return dead_nodes;
 
   time_t curr_time = time(NULL);
-  const auto& nodes = is_scheduler_ ? GetNodeIDs(kTrainerGroup)
-                                    : GetNodeIDs(kScheduler);
+  const auto& nodes =
+      is_scheduler_ ? GetNodeIDs(kTrainerGroup) : GetNodeIDs(kScheduler);
   {
     std::lock_guard<std::mutex> lk(heartbeat_mu_);
     for (int r : nodes) {
@@ -195,14 +194,14 @@ void Postoffice::ClearNodes() {
 void Postoffice::AddNodes(const std::vector<int>& node_ids,
                           const Node::Role role) {
   std::lock_guard<std::mutex> lk(node_ids_mu_);
-  if(role == Node::SCHEDULER){
+  if (role == Node::SCHEDULER) {
     CHECK_EQ(node_ids.size(), 1);
     CHECK_EQ(node_ids[0], kScheduler);
-    for (int g:{kScheduler, kTrainerGroup, kScheduler +  kTrainerGroup }) {
+    for (int g : {kScheduler, kTrainerGroup, kScheduler + kTrainerGroup}) {
       if (std::find(node_ids_[g].begin(), node_ids_[g].end(), kScheduler) ==
           node_ids_[g].end()) {
         node_ids_[g].push_back(kScheduler);
-      }else{
+      } else {
         LOG(WARNING) << "Scheduler already exists";
       }
     }
@@ -211,8 +210,7 @@ void Postoffice::AddNodes(const std::vector<int>& node_ids,
 
   for (int id : node_ids) {
     bool is_new = false;
-    for (int g :
-         {id, kTrainerGroup, kScheduler+kTrainerGroup}) {
+    for (int g : {id, kTrainerGroup, kScheduler + kTrainerGroup}) {
       if (std::find(node_ids_[g].begin(), node_ids_[g].end(), id) ==
           node_ids_[g].end()) {
         node_ids_[g].push_back(id);
@@ -221,7 +219,7 @@ void Postoffice::AddNodes(const std::vector<int>& node_ids,
     }
     if (is_new) {
       ++this->num_trainers_;
-    }else{
+    } else {
       LOG(WARNING) << "Node " << id << " already exists";
     }
   }
@@ -250,11 +248,11 @@ int Postoffice::GenNextID() {
   CHECK(is_scheduler_);
   std::lock_guard<std::mutex> lk(node_ids_mu_);
   auto& nodes = this->node_ids_[kTrainerGroup];
-  if(nodes.empty()){
+  if (nodes.empty()) {
     return kMinTrainerID;
   }
   std::sort(nodes.begin(), nodes.end());
-  //10 11 13 14 => 12   10 11 12 => 13  get the first missing id number
+  // 10 11 13 14 => 12   10 11 12 => 13  get the first missing id number
   int id = kMinTrainerID;
   for (size_t i = 0; i < nodes.size(); ++i) {
     if (nodes[i] != id) {
@@ -265,14 +263,16 @@ int Postoffice::GenNextID() {
   return id;
 }
 
-void Postoffice::UpdateOverlay(int node_id, const std::vector<int>& neighbour) {
+void Postoffice::UpdateOverlay(int node_id, const std::vector<int>& neighbour,
+                               const std::string hostname, int port) {
   CHECK(is_scheduler_);
   this->overlay_graph_[node_id] = neighbour;
-  for(auto &id:neighbour){
-    //check if the neighbour is in the graph
+  addNodeToIp2Nodes(hostname, node_id);
+  for (auto& id : neighbour) {
+    // check if the neighbour is in the graph
     auto it = this->overlay_graph_.find(id);
     CHECK(it != this->overlay_graph_.end());
-    //check if the node is in the neighbour's neighbour
+    // check if the node is in the neighbour's neighbour
     auto it2 = std::find(it->second.begin(), it->second.end(), node_id);
     CHECK(it2 == it->second.end());
     it->second.push_back(node_id);
@@ -283,16 +283,16 @@ const Postoffice::AdjacencyList& Postoffice::GetGlobalOverlay() const {
   return this->overlay_graph_;
 }
 
-bool Postoffice::isOverlayNodesConected(const int a , const int b) const {
+bool Postoffice::isOverlayNodesConected(const int a, const int b) const {
   auto it = this->overlay_graph_.find(a);
-  if(it == overlay_graph_.end()){
+  if (it == overlay_graph_.end()) {
     return false;
   }
   auto it2 = std::find(it->second.begin(), it->second.end(), b);
   return it2 != it->second.end();
 }
 
-std::vector<int>& Postoffice::GetOverlayNeighbour(int node_id){
+std::vector<int>& Postoffice::GetOverlayNeighbour(int node_id) {
   auto it = this->overlay_graph_.find(node_id);
   CHECK(it != this->overlay_graph_.end());
   return it->second;

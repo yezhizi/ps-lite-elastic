@@ -49,7 +49,22 @@ class Postoffice {
    * \param node_id the node id
    * \param children the children of this node
    */
-  void UpdateOverlay(int node_id, const std::vector<int>& neighbour);
+  void UpdateOverlay(int node_id, const std::vector<int>& neighbour,
+                     const std::string hostname, int port);
+
+  const std::unordered_map<std::string, std::vector<int>>& GetIp2Nodes() const {
+    return ip2nodes_;
+  }
+  void addNodeToIp2Nodes(const std::string& ip, int node_id) {
+    if (!(ip2nodes_.find(ip) == ip2nodes_.end()) && ip2nodes_[ip].empty()) {
+      ip2nodes_[ip].push_back(node_id);
+    } else {
+      auto& nodes = ip2nodes_[ip];
+      if (std::find(nodes.begin(), nodes.end(), node_id) == nodes.end()) {
+        nodes.push_back(node_id);
+      }
+    }
+    }
 
   /**
    * \brief get the global overlay topo
@@ -301,6 +316,8 @@ class Postoffice {
   std::shared_ptr<Environment> env_ref_;
   time_t start_time_;
   DISALLOW_COPY_AND_ASSIGN(Postoffice);
+
+  std::unordered_map<std::string, std::vector<int>> ip2nodes_;
 };
 
 /** \brief verbose log */

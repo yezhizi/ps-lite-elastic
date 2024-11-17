@@ -132,7 +132,7 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
       Send(back);
 
       // update overlay
-      Postoffice::Get()->UpdateOverlay(node.id, targets);
+      Postoffice::Get()->UpdateOverlay(node.id, targets, node.hostname, node.port);
     }
     ready_ = true;
   } else {
@@ -387,6 +387,7 @@ void Van::ProcessAddNodeCommand(Message* msg, Meta* nodes,
             Connect(node);
             ++num_trainers_;
             targets.push_back(node.id);
+            ps::Postoffice::Get()->addNodeToIp2Nodes(node.hostname, node.id);
           }
         }
       }
