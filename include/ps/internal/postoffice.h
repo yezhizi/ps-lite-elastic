@@ -64,7 +64,7 @@ class Postoffice {
         nodes.push_back(node_id);
       }
     }
-    }
+  }
 
   /**
    * \brief get the global overlay topo
@@ -96,6 +96,11 @@ class Postoffice {
   void UpdateLocalTrans(int parent, const std::vector<int>& children);
 
   const int GetMyID() const { return van_->my_node().id; }
+
+  std::string getSchedulerHost() const {
+    return std::string(
+        CHECK_NOTNULL(Environment::Get()->find("DMLC_PS_ROOT_URI")));
+  }
 
   /**
    * \brief get the parent of local transport topo
