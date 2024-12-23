@@ -3,7 +3,9 @@
  */
 
 #include <chrono>
-#include <thread>
+#include <random>
+#include <vector>
+#include <string>
 
 #include "ps/base.h"
 #include "ps/internal/customer.h"
@@ -88,12 +90,35 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
 
       // check if all the expected nodes are registered
       std::vector<int> targets;
-      if (debug_overlay_) {
+      if (debug_overlay_ == 1) {
         // send add node msg to all nodes
         for (auto& n : nodes->control.node) {
           if (n.id == kScheduler || n.id == node.id) continue;
           targets.push_back(n.id);
         }
+      } else if (debug_overlay_ == 2) {
+        // randomly choose some node
+        std::vector<int> all_ids;
+        for (auto& n : nodes->control.node) {
+          if (n.id == kScheduler || n.id == node.id) continue;
+          all_ids.push_back(n.id);
+        }
+        if (!all_ids.empty()) {
+          // seed
+          const char* seed_s = Environment::Get()->find("OVERLAY_SEED");
+          std::random_device rd;
+          size_t seed = seed_s ? std::stoi(seed_s) : rd();
+          std::mt19937 gen(seed);
+          std::shuffle(all_ids.begin(), all_ids.end(), gen);
+          size_t size = all_ids.size();
+          size_t min_size = (size / 3 > 0) ? (size / 3) : 1;
+          std::uniform_int_distribution<size_t> distrib(min_size, size);
+          int num = distrib(gen);
+          for (int i = 0; i < num; ++i) {
+            targets.push_back(all_ids[i]);
+          }
+        }
+
       } else {
         for (auto& expect_node : expect_nodes) {
           auto expect_node_host_ip =
@@ -132,7 +157,8 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
       Send(back);
 
       // update overlay
-      Postoffice::Get()->UpdateOverlay(node.id, targets, node.hostname, node.port);
+      Postoffice::Get()->UpdateOverlay(node.id, targets, node.hostname,
+                                       node.port);
     }
     ready_ = true;
   } else {
@@ -363,7 +389,6 @@ void Van::ProcessAddNodeCommand(Message* msg, Meta* nodes,
     // Incremental Update
     std::vector<int> targets;
     for (const auto& node : ctrl.node) {
-
       std::string addr_str = node.hostname + ":" + std::to_string(node.port);
       if (connected_nodes_.find(addr_str) == connected_nodes_.end()) {
         if (!node.is_recovery) {
@@ -379,7 +404,7 @@ void Van::ProcessAddNodeCommand(Message* msg, Meta* nodes,
           //                << " is not expected to be connected";
           //   continue;
           // }
-          
+
           if (node.id == kScheduler) {
             Connect(scheduler_);
             Postoffice::Get()->AddNodes({kScheduler}, Node::Role::SCHEDULER);
@@ -400,6 +425,8 @@ void Van::ProcessAddNodeCommand(Message* msg, Meta* nodes,
     Postoffice::Get()->AddNodes(targets);
     ready_ = true;
     is_scale_processing_ = true;
+    PS_VLOG(2) << "The node " << my_node_.id << " is connected to "
+               << connected_nodes_;
   }
 }
 
@@ -453,8 +480,12 @@ void Van::Start(int customer_id) {
       this->GetExpectNodes();
     }
     // overlay debug
-    debug_overlay_ =
-        CHECK_NOTNULL(Environment::Get()->find("DEBUG_OVERLAY")) ? true : false;
+    const char* debug_level = Environment::Get()->find("DEBUG_OVERLAY");
+    if (debug_level) {
+      debug_overlay_ = std::stoi(debug_level);
+    } else {
+      debug_overlay_ = 0;
+    }
     // bind.
     my_node_.port = Bind(my_node_, is_scheduler_ ? 0 : 40);
     PS_VLOG(1) << "Bind to " << my_node_.DebugString();
@@ -565,8 +596,14 @@ int Van::Send(const Message& msg) {
   if (Postoffice::Get()->verbose() >= 2) {
     if (!msg.meta.simple_app) {
       PS_VLOG(3) << msg.DebugString();
+    } else if (is_scheduler_) {
+      if (msg.meta.head == 104)
+        PS_VLOG(3) << msg.DebugString();
+      else {
+        PS_VLOG(2) << msg.DebugString();
+      }
     } else {
-      PS_VLOG(2) << msg.DebugString();
+      PS_VLOG(3) << msg.DebugString();
     }
   }
   return send_bytes;
@@ -593,11 +630,14 @@ void Van::Receiving() {
     if (Postoffice::Get()->verbose() >= 2) {
       if (!msg.meta.simple_app) {
         PS_VLOG(3) << msg.DebugString();
-      } else {
-        if (msg.meta.head == 13)
+      } else if (is_scheduler_) {
+        if (msg.meta.head == 104)
           PS_VLOG(3) << msg.DebugString();
-        else
+        else {
           PS_VLOG(2) << msg.DebugString();
+        }
+      } else {
+        PS_VLOG(3) << msg.DebugString();
       }
     }
     // duplicated message
@@ -774,9 +814,6 @@ void Van::Heartbeat() {
 //   return ret;
 // }
 Meta& Van::GetExpectNodes() {
-  if (debug_overlay_) {
-    return this->expect_nodes_;
-  }
   if (this->expect_nodes_.control.node.size() != 0) {
     return this->expect_nodes_;
   }

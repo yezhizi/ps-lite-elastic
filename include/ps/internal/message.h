@@ -162,7 +162,7 @@ struct Meta {
          << ", push=" << push;
     }
     if (head != kEmpty) ss << ", head=" << head;
-    if (body.size()) ss << ", body=" << body;
+    // if (body.size()) ss << ", body=" << body;
     if (data_type.size()) {
       ss << ", data_type={";
       for (auto d : data_type) ss << " " << DataTypeName[static_cast<int>(d)];

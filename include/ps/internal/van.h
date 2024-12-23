@@ -209,7 +209,7 @@ class Van {
   int init_stage = 0;
   
   /** whether overlay debug mode is on */
-  bool debug_overlay_;
+  int debug_overlay_;
 
   Meta expect_nodes_;
 
