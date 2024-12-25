@@ -84,6 +84,22 @@ class SArray {
   }
 
   /**
+   * \brief construct from a shared ptr holder
+   *
+   * Zero-copy constructor, namely just copy the pointer
+   *
+   * \param ptr_holder the shared pointer of the source
+   * \param data the raw pointer of the source
+   * \param size the length
+   */
+  template <typename W>
+  explicit SArray(const std::shared_ptr<W>& ptr_holder, V* data, size_t size) {
+    ptr_ = std::shared_ptr<V>(ptr_holder, data);
+    size_ = size;
+    capacity_ = size_;
+  }
+
+  /**
    * \brief construct from another SArray.
    *
    * Zero-copy constructor, namely just copy the pointer
