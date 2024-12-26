@@ -18,14 +18,15 @@ if(POLICY CMP0074)  # Support Protobuf_ROOT etc environment variables on CMake 3
   cmake_policy(SET CMP0074 NEW)
 endif()
 
-# ---[ zmq
+# ---[ zmq >= 4.3.5
 find_package(ZMQ)
-if(NOT ZMQ_FOUND)
+if(NOT ZMQ_FOUND OR ZMQ_VERSION VERSION_LESS "4.3.5")
   cmake_minimum_required(VERSION 3.11)
   include(FetchContent)
   FetchContent_Declare(zmq
-    URL https://github.com/zeromq/libzmq/releases/download/v4.3.2/zeromq-4.3.2.zip
-    URL_HASH SHA256=d01517983ded9ff1b6c40f8206fc2b44ac96157a5aea7b974e8b0079547edfda)
+    URL https://github.com/zeromq/libzmq/releases/download/v4.3.5/zeromq-4.3.5.zip
+    URL_HASH SHA256=276f5c9213589c4ecf0d8c836018604e7a56542b10913cfc16d0adcfbc04298c
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
   FetchContent_GetProperties(zmq)
   if(NOT zmq_POPULATED)
     FetchContent_Populate(zmq)
