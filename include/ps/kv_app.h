@@ -57,7 +57,7 @@ struct KVPairs {
   /** \brief the according values */
   SArray<Val> vals;
   /** \brief the according value lengths (could be empty) */
-  SArray<int> lens;
+  SArray<uint64_t> lens;
   /** \brief priority */
   int priority = 0;
 };
@@ -176,7 +176,7 @@ class KVTrainer: public SimpleApp{
 
   int Pull(const std::vector<Key>& keys,
            std::vector<Val>* vals,
-           std::vector<int>* lens = nullptr,
+           std::vector<uint64_t>* lens = nullptr,
            int cmd = 0,
            const Callback& cb = nullptr,
            int priority = 0) {
@@ -295,7 +295,7 @@ class KVTrainer: public SimpleApp{
    */
   int ZPull(const SArray<Key>& keys,
             SArray<Val>* vals,
-            SArray<int>* lens = nullptr,
+            SArray<uint64_t>* lens = nullptr,
             int cmd = 0,
             const Callback& cb = nullptr,
             int priority = 0) {
@@ -318,7 +318,7 @@ class KVTrainer: public SimpleApp{
   int ZPushPull(const SArray<Key>& keys,
                 const SArray<Val>& vals,
                 SArray<Val>* outs,
-                SArray<int>* lens = nullptr,
+                SArray<uint64_t>* lens = nullptr,
                 int cmd = 0,
                 const std::string& extra = nullptr,
                 const Callback& cb = nullptr,
@@ -337,7 +337,7 @@ class KVTrainer: public SimpleApp{
   int ZMove(int next,
             const SArray<Key>& keys,
             const SArray<Val>& vals,
-            const SArray<int>& lens = {},
+            const SArray<uint64_t>& lens = {},
             const std::string& extra = "",
             int cmd = 0,
             const Callback& cb = nullptr,
@@ -367,8 +367,8 @@ class KVTrainer: public SimpleApp{
     /**
      * \brief internal pull, C/D can be either SArray or std::vector
      */
-    template <typename C, typename D>
-    int AddPullCB(const SArray<Key>& keys, C* vals, D* lens,
+    template <typename C>
+    int AddPullCB(const SArray<Key>& keys, C* vals, SArray<uint64_t>* lens,
               int cmd, const Callback& cb);
     /**
      * \brief add a callback for a request. threadsafe.
@@ -421,9 +421,9 @@ class KVTrainer: public SimpleApp{
 };
 
 template <typename Val>
-template <typename C, typename D>
+template <typename C>
 int KVTrainer<Val>::AddPullCB(
-    const SArray<Key>& keys, C* vals, D* lens, int cmd,
+    const SArray<Key>& keys, C* vals, SArray<uint64_t>* lens, int cmd,
     const Callback& cb) {
   int parent = Postoffice::Get()->GetMyParent();
   CHECK_GE(parent,kMinTrainerID);
@@ -457,7 +457,7 @@ int KVTrainer<Val>::AddPullCB(
         CHECK_EQ(vals->size(), total_val);
       }
       Val* p_vals = vals->data();
-      int *p_lens = nullptr;
+      uint64_t *p_lens = nullptr;
       if (lens) {
         if (lens->empty()) {
           lens->resize(keys.size());
@@ -470,8 +470,8 @@ int KVTrainer<Val>::AddPullCB(
         memcpy(p_vals, s.vals.data(), s.vals.size() * sizeof(Val));
         p_vals += s.vals.size();
         if (p_lens) {
-          memcpy(p_lens, s.lens.data(), s.lens.size() * sizeof(int));
-          p_lens += s.lens.size();
+            std::copy(s.lens.begin(), s.lens.end(), p_lens);
+            p_lens += s.lens.size();
         }
       }
 
