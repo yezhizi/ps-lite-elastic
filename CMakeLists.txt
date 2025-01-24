@@ -20,7 +20,7 @@ endif()
 
 # ---[ zmq >= 4.3.5
 find_package(ZMQ)
-if(NOT ZMQ_FOUND OR ZMQ_VERSION VERSION_LESS "4.3.5")
+if(NOT ZMQ_FOUND)
   cmake_minimum_required(VERSION 3.11)
   include(FetchContent)
   FetchContent_Declare(zmq
