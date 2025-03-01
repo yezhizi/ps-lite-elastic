@@ -117,7 +117,7 @@ void Van::ProcessAddNodeCommandAtScheduler(Message* msg, Meta* nodes,
         // send message to the controller
         std::string node_info = node.role == Node::WORKER ? "w" : "s";
         node_info += std::to_string(node.id);
-        SendSingnaltoController(kControllerSignal::kAddNodeSignal, node_info);
+        SendSignaltoController(kControllerSignal::kAddNodeSignal, node_info);
       } else {
         // sychronize add
         Postoffice::Get()->AddNodes({node.id}, role);
@@ -227,22 +227,8 @@ void Van::UpdateLocalID(Message* msg, std::unordered_set<int>* deadnodes_set,
 
     // Add new coming node to var *nodes*, or replace the dead node
     bool isNewNode = true;
-
-
+    
     for (auto& node : nodes->control.node) {
-      if (deadnodes_set->find(node.id) != deadnodes_set->end() &&
-          node.role == ctrl.node[0].role) {
-        auto& recovery_node = ctrl.node[0];
-        // assign previous node id
-        recovery_node.id = node.id;
-        recovery_node.is_recovery = true;
-        PS_VLOG(1) << "replace dead node " << node.DebugString() << " by node "
-                   << recovery_node.DebugString();
-        node = recovery_node;
-        recovery_nodes->control.node.push_back(recovery_node);
-        isNewNode = false;
-        break;
-      }
       if (deadnodes_set->find(node.id) != deadnodes_set->end() &&
           node.role == ctrl.node[0].role) {
         auto& recovery_node = ctrl.node[0];
@@ -813,7 +799,8 @@ void Van::Heartbeat() {
     Send(msg);
   }
 }
-int Van::SendSingnaltoController(kControllerSignal signal,
+
+int Van::SendSignaltoController(kControllerSignal signal,
                                  const std::string& body) {
   CHECK_EQ(my_node_.role, Node::SCHEDULER);
   Message msg;

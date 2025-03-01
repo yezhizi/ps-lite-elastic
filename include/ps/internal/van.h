@@ -220,7 +220,7 @@ class Van {
   bool is_first_barrier_done_ = false;
 
 
-  int SendSingnaltoController(kControllerSignal signal, const std::string &body);
+  int SendSignaltoController(kControllerSignal signal, const std::string &body);
   /**
    * \brief processing logic of AddNode message for scheduler
    */
